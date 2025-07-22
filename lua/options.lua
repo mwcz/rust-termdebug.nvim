@@ -1,16 +1,24 @@
 local options = {
     defaults = {
-        -- whether to enter insert mode upon entering the gdb window
+        -- Whether to enter insert mode upon entering the gdb window.
         gdb_auto_insert = true,
-        -- provide a list of commands to run in gdb when it starts up (recommend putting these in your gdbinit, but this is offered in case you want some startup commands specific to vim)
+        -- Provide a list of commands to run in gdb when it starts up.  It's
+        -- better to put startup commands in your gdbinit file instead, but
+        -- this is offered for any gdb startup commands that you want to be
+        -- specific to vim.
         gdb_startup_commands = {},
-        -- after launching gdb, return the cursor to its original location instead of leaving it in the gdb window
+        -- After launching gdb, return the cursor to its original location
+        -- instead of moving it to the new gdb window; this is useful because
+        -- you must launch gdb, then set breakpoints, then return to the gdb
+        -- window to issue commands.
         keep_cursor_in_place = true,
-        -- enable or disable the default keymaps
+        -- Enable default keymaps, or set to `false` to set up your own keymaps.
         use_default_keymaps = true,
-        -- swap the gdb window and the program stdout window
+        -- Swap the gdb window and the program stdout window.
         swap_termdebug_windows = true,
-        -- you may optionally provide a termdebug_config here as a convenience, but you may instead set up termdebug_config as described in `:help termdebug_config`
+        -- This is used to configure Vim's built-in g:termdebug_config on
+        -- startup. If you already have g:termdebug_config set in your config,
+        -- this option will be ignored.
         termdebug_config = {
             wide = 1,
             map_K = 0,
