@@ -8,8 +8,8 @@ I wrote it in lua since I don't know vimscript, so it's only compatible with neo
 
 Install Rust and Cargo through [rustup][rustup]. Reasons for requiring rustup:
 
- - rustup installs come with `rust-gdb`; a GDB wrapper that includes pretty formatters for many complex Rust types.
- - `rust-gdb` will automatically launch with formatters that match the version of rustc in use for your project, avoiding debugger errors about being unable to print some values.
+ - rustup installs come with `rust-gdb`; a GDB wrapper that includes pretty-printers for many complex Rust types.
+ - `rust-gdb` will automatically launch with-printers that match the version of rustc in use for your project, avoiding debugger errors about being unable to print some values.
 
 ## Installation
 
@@ -30,17 +30,17 @@ Default configuration:
 
 ```lua
 {
-	-- whether to enter insert mode upon entering the gdb window
+	-- Whether to enter insert mode upon entering the gdb window.
 	gdb_auto_insert = true,
-	-- provide a list of commands to run in gdb when it starts up (recommend putting the commands in your gdbinit instead, but this is offered for gdb startup commands specific to vim)
+	-- Provide a list of commands to run in gdb when it starts up (recommend putting the commands in your gdbinit instead, but this is offered for gdb startup commands specific to vim).
 	gdb_startup_commands = {},
-	-- after launching gdb, return the cursor to its original location instead of moving it to the new gdb window; this is useful because you must launch gdb, then set breakpoints, then return to the gdb window to issue commands
+	-- After launching gdb, return the cursor to its original location instead of moving it to the new gdb window; this is useful because you must launch gdb, then set breakpoints, then return to the gdb window to issue commands.
 	keep_cursor_in_place = true,
-	-- enable default keymaps, or set to `false` to set up your own keymaps
+	-- Enable default keymaps, or set to `false` to set up your own keymaps.
 	use_default_keymaps = true,
-	-- swap the gdb window and the program stdout window
+	-- Swap the gdb window and the program stdout window.
     swap_termdebug_windows = true,
-	-- you may optionally provide a termdebug_config here as a convenience, but you may instead set up termdebug_config as described in `:help termdebug_config` (if termdebug_config is already initialized, this setting will do nothing)
+	-- This is used to configure Vim's built-in g:termdebug_config on startup. If you already have g:termdebug_config set in your config, this option will be ignored.
 	termdebug_config = {
 		wide = 1,
 		map_K = 0,
@@ -66,7 +66,7 @@ Default configuration:
  1. Edit a Rust file.
  2. Press `<leader>dt` to debug tests.  If multiple test module binaries exist, choose the one you want to debug.  The one being edited will appear at the top of the list.
  3. Move to a line of interest and press `<leader>b` to set a breakpoint inside the tests.
- 4. Move into the gdb window and enter `r` to run all the tests for the chosen module, or use a name filters like you'd pass to `cargo test`, eg `r my_test_name`
+ 4. Move into the gdb window and enter `r` to run all the tests for the chosen module, or use a name filter like you'd pass to `cargo test`, eg `r my_test_name`
  5. Use gdb as usual to debug the test(s).
 
 
