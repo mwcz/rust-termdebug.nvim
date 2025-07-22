@@ -26,7 +26,9 @@ cargo.build_tests = function()
                 and artifact.profile.test == true
                 and artifact.executable ~= nil
             then
-                table.insert(test_artifacts, { name = artifact.target.name, path = artifact.executable })
+                local kinds = table.concat(artifact.target.kind, ", ")
+                local name = artifact.target.name .. " (" .. kinds .. ")"
+                table.insert(test_artifacts, { name = name, path = artifact.executable })
             end
         end
     end
