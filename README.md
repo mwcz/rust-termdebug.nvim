@@ -39,7 +39,7 @@ Default configuration:
 	-- Enable default keymaps, or set to `false` to set up your own keymaps.
 	use_default_keymaps = true,
 	-- Swap the gdb window and the program stdout window.
-    swap_termdebug_windows = true,
+	swap_termdebug_windows = true,
 	-- This is used to configure Vim's built-in g:termdebug_config on startup. If you already have g:termdebug_config set in your config, this option will be ignored.
 	termdebug_config = {
 		wide = 1,
