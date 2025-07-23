@@ -1,5 +1,4 @@
 local termdebug = require("termdebug")
-local options = require("options")
 
 local cargo = {}
 
@@ -26,9 +25,11 @@ cargo.build_tests = function()
                 and artifact.profile.test == true
                 and artifact.executable ~= nil
             then
-                local kinds = table.concat(artifact.target.kind, ", ")
-                local name = artifact.target.name .. " (" .. kinds .. ")"
-                table.insert(test_artifacts, { name = name, path = artifact.executable })
+                table.insert(test_artifacts, {
+                    name = artifact.target.name,
+                    path = artifact.executable,
+                    kind = artifact.target.kind,
+                })
             end
         end
     end
@@ -149,9 +150,10 @@ end
 
 cargo.debug_tests = function()
     vim.notify("Compiling workspace tests...", vim.log.levels.INFO)
+    local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
+    local metadata = vim.json.decode(metadata_json)
 
     local test_artifacts = cargo.build_tests()
-    local metadata = cargo.metadata()
 
     if #test_artifacts == 0 then
         vim.notify("Failed to find any test executables.", vim.log.levels.ERROR)
@@ -159,26 +161,59 @@ cargo.debug_tests = function()
     end
 
     if #test_artifacts > 1 then
-        -- Use the new reusable function to get the current crate's name.
+        local file_path = vim.fn.expand("%:p")
         local file_dir = vim.fn.expand("%:p:h")
-        local current_crate_name = cargo.current_crate_name(file_dir, metadata)
-        if current_crate_name then
-            local current_artifact_idx
+        local current_artifact_idx
+
+        -- check if this is an integration test (/tests/)
+        if string.find(file_path, "/tests/", 1, true) then
+            local test_name = vim.fn.fnamemodify(file_path, ":t:r") -- Get filename without extension
             for i, artifact in ipairs(test_artifacts) do
-                -- remove the kind from the artifact name (kind is elsewhere added in parenthesis after the crate name)
-                local artifact_name_without_kind = string.gsub(artifact.name, " %b()", "")
-                if artifact_name_without_kind == current_crate_name then
+                -- if kind contains "test"
+                local is_integration_test = false
+                for _, kind in ipairs(artifact.kind) do
+                    if kind == "test" then
+                        is_integration_test = true
+                    end
+                end
+
+                if artifact.name == test_name and is_integration_test then
                     current_artifact_idx = i
                     break
                 end
             end
-            if current_artifact_idx then
-                local prioritized_artifact = table.remove(test_artifacts, current_artifact_idx)
-                table.insert(test_artifacts, 1, prioritized_artifact)
+        else
+            -- Otherwise, use the existing logic for lib and bin tests inside src/
+            local current_crate_name = cargo.current_crate_name(file_dir, metadata)
+            if current_crate_name then
+                local target_kind_heuristic = "lib"
+                if string.find(file_path, "/src/main.rs", 1, true) or string.find(file_path, "/src/bin/", 1, true) then
+                    target_kind_heuristic = "bin"
+                end
+                for i, artifact in ipairs(test_artifacts) do
+                    -- if kind contains the target kind
+                    local is_right_kind = false
+                    for _, kind in ipairs(artifact.kind) do
+                        if kind == target_kind_heuristic then
+                            is_right_kind = true
+                        end
+                    end
+
+                    if artifact.name == current_crate_name and is_right_kind then
+                        current_artifact_idx = i
+                        break
+                    end
+                end
             end
+        end
+
+        if current_artifact_idx then
+            local prioritized_artifact = table.remove(test_artifacts, current_artifact_idx)
+            table.insert(test_artifacts, 1, prioritized_artifact)
         end
     end
 
+    -- The rest of the logic for selecting and launching the debugger remains the same.
     local original_win_id = vim.api.nvim_get_current_win()
     if #test_artifacts == 1 then
         local bin_path = test_artifacts[1].path
@@ -187,7 +222,8 @@ cargo.debug_tests = function()
     else
         local choices = {}
         for _, artifact in ipairs(test_artifacts) do
-            table.insert(choices, "Test module: " .. artifact.name)
+            local kinds = table.concat(artifact.kind, ", ")
+            table.insert(choices, "Test module: " .. artifact.name .. " (" .. kinds .. ")")
         end
 
         vim.ui.select(choices, { prompt = "Select a test binary to debug:" }, function(choice, idx)
