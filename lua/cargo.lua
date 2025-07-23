@@ -165,7 +165,9 @@ cargo.debug_tests = function()
         if current_crate_name then
             local current_artifact_idx
             for i, artifact in ipairs(test_artifacts) do
-                if artifact.name == current_crate_name then
+                -- remove the kind from the artifact name (kind is elsewhere added in parenthesis after the crate name)
+                local artifact_name_without_kind = string.gsub(artifact.name, " %b()", "")
+                if artifact_name_without_kind == current_crate_name then
                     current_artifact_idx = i
                     break
                 end
