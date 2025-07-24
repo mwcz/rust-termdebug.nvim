@@ -9,7 +9,7 @@ cargo.build_tests = function()
     local cargo_output = vim.fn.system(cargo_cmd)
 
     if vim.v.shell_error ~= 0 then
-        vim.notify("cargo command failed.", vim.log.levels.ERROR)
+        vim.notify("Error: cargo build failed with exit code " .. vim.v.shell_error, vim.log.levels.ERROR)
         return
     end
 
