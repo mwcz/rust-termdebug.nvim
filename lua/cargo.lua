@@ -155,6 +155,10 @@ cargo.debug_tests = function()
 
     local test_artifacts = cargo.build_tests()
 
+    if test_artifacts == nil then
+        return
+    end
+
     if #test_artifacts == 0 then
         vim.notify("Failed to find any test executables.", vim.log.levels.ERROR)
         return
