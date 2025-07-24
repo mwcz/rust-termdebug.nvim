@@ -5,7 +5,7 @@ local cargo = {}
 -- build tests and record the test artifacts (test binaries)
 cargo.build_tests = function()
     -- build test binaries and capture their locations
-    local cargo_cmd = "cargo --quiet test --workspace --no-run --message-format=json"
+    local cargo_cmd = "cargo --quiet test --workspace --no-run --tests --message-format=json"
     local cargo_output = vim.fn.system(cargo_cmd)
 
     if vim.v.shell_error ~= 0 then
