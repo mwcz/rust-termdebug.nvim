@@ -241,4 +241,78 @@ cargo.debug_tests = function()
     end
 end
 
+cargo.debug_example = function()
+    vim.notify("Finding examples...", vim.log.levels.INFO)
+
+    local metadata = cargo.metadata()
+    if not metadata then
+        return
+    end
+    local target_dir = metadata.target_directory
+
+    local examples = {}
+    for _, package in ipairs(metadata.packages) do
+        for _, target in ipairs(package.targets) do
+            if vim.deep_equal(target.kind, { "example" }) then
+                table.insert(examples, { name = target.name })
+            end
+        end
+    end
+
+    if #examples == 0 then
+        vim.notify("No examples found in this project.", vim.log.levels.WARN)
+        return
+    end
+
+    -- 2. If editing a file in the 'examples/' directory, move it to the top of the list.
+    local file_path = vim.fn.expand("%:p")
+    if string.find(file_path, "/examples/", 1, true) then
+        local example_name = vim.fn.fnamemodify(file_path, ":t:r")
+        local current_example_idx
+        for i, example in ipairs(examples) do
+            if example.name == example_name then
+                current_example_idx = i
+                break
+            end
+        end
+        if current_example_idx then
+            local prioritized_example = table.remove(examples, current_example_idx)
+            table.insert(examples, 1, prioritized_example)
+        end
+    end
+
+    local function build_and_debug_example(example_name)
+        local example_path = target_dir .. "/debug/examples/" .. example_name
+
+        vim.notify("Building example: " .. example_name, vim.log.levels.INFO)
+        local build_output = vim.fn.system("cargo build --example " .. example_name)
+        if vim.v.shell_error ~= 0 then
+            vim.notify("Cargo build failed for example '" .. example_name .. "'", vim.log.levels.ERROR)
+            print(build_output)
+            return
+        end
+
+        local original_win_id = vim.api.nvim_get_current_win()
+        vim.notify("Debugging example: " .. example_path, vim.log.levels.INFO)
+        termdebug.start(example_path, original_win_id)
+    end
+
+    if #examples == 1 then
+        build_and_debug_example(examples[1].name)
+    else
+        local choices = {}
+        for _, example in ipairs(examples) do
+            table.insert(choices, "Example: " .. example.name)
+        end
+
+        vim.ui.select(choices, { prompt = "Select an example to debug:" }, function(choice, idx)
+            if choice then
+                build_and_debug_example(examples[idx].name)
+            else
+                vim.notify("Debugger launch cancelled.", vim.log.levels.INFO)
+            end
+        end)
+    end
+end
+
 return cargo
