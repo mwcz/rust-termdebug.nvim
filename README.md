@@ -1,6 +1,6 @@
 # rust-termdebug.nvim
 
-This is a plugin I slapped together to make working with vim's [termdebug][termdebug] on Rust projects.
+This plugin improves the experience of debugging Rust code with vim's [termdebug][termdebug] and GDB.
 
 I wrote it in lua since I don't know vimscript, so it's only compatible with neovim, but it would work in vim as well if ported to vimscript.
 
