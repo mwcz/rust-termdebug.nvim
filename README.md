@@ -67,6 +67,7 @@ These are the default keymaps.
 | :---         | :---                   | :---                                                                                                                                                             |
 | `<leader>ds` | Debug binary           | Build and debug a binary in your workspace. If multiple binaries exist, it opens a menu to let you choose, prioritizing the binary from the current crate.       |
 | `<leader>dt` | Debug tests            | Build and debug a test suite in your workspace. If multiple test suites exist, it opens a menu to let you choose, prioritizing the suite from the current crate. |
+| `<leader>de` | Debug examples         | Build and debug an example in your workspace. If multiple exampels exist, it opens a menu to let you choose, prioritizing any example currently being edited.    |
 | `<leader>b`  | Set breakpoint         | Set a breakpoint on the current line.                                                                                                                            |
 | `<leader>db` | Delete breakpoint      | Delete the breakpoint on the current line.                                                                                                                       |
 | `<leader>dx` | Delete all breakpoints | Delete all breakpoints.                                                                                                                                          |
