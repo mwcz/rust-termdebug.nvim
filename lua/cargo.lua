@@ -148,6 +148,95 @@ cargo.debug_bin = function()
     end
 end
 
+-- Use a session-local variable to store the persisted binary name.
+local persisted_binary = nil
+
+cargo.debug_bin = function()
+    local metadata = cargo.metadata()
+    local target_dir = metadata.target_directory
+
+    local function rust_build_and_debug(target_dir, bin_crate_name)
+        local bin_path = target_dir .. "/debug/" .. bin_crate_name
+        vim.notify("Running cargo build", vim.log.levels.INFO)
+        local build_output = vim.fn.system("cargo build --bin " .. bin_crate_name)
+        if vim.v.shell_error ~= 0 then
+            vim.notify("cargo build failed", vim.log.levels.ERROR)
+            print(build_output)
+            return
+        end
+        local original_win_id = vim.api.nvim_get_current_win()
+        vim.notify("Debugging: " .. bin_path, vim.log.levels.INFO)
+        termdebug.start(bin_path, original_win_id)
+    end
+
+    if persisted_binary then
+        rust_build_and_debug(target_dir, persisted_binary)
+        return
+    end
+
+    local all_binaries = {}
+    for _, package in ipairs(metadata.packages) do
+        for _, target in ipairs(package.targets) do
+            if vim.deep_equal(target.kind, { "bin" }) then
+                table.insert(all_binaries, { name = target.name, package_name = package.name })
+            end
+        end
+    end
+
+    if #all_binaries == 0 then
+        vim.notify("No binaries found in this project.", vim.log.levels.WARN)
+        return
+    end
+
+    local file_dir = vim.fn.expand("%:p:h")
+    local current_crate_name = cargo.current_crate_name(file_dir, metadata)
+
+    -- in the binary selection list, put binaries associated with the current file first
+    local sorted_binaries = {}
+    if current_crate_name then
+        local other_binaries = {}
+        for _, bin_info in ipairs(all_binaries) do
+            if bin_info.package_name == current_crate_name then
+                table.insert(sorted_binaries, bin_info)
+            else
+                table.insert(other_binaries, bin_info)
+            end
+        end
+        vim.list_extend(sorted_binaries, other_binaries)
+    else
+        sorted_binaries = all_binaries
+    end
+
+    if #sorted_binaries == 1 then
+        -- build and debug the one and only binary
+        rust_build_and_debug(target_dir, sorted_binaries[1].name)
+    else
+        -- choose which binary to build and debug
+        local choices = {}
+        local persist_suffix = " (persist)"
+        for _, bin_info in ipairs(sorted_binaries) do
+            table.insert(choices, bin_info.name)
+            table.insert(choices, bin_info.name .. persist_suffix)
+        end
+
+        vim.ui.select(choices, { prompt = "Select a binary to debug:" }, function(choice)
+            if choice then
+                local bin_to_debug
+                -- Check if the user chose a "persist" option.
+                if choice:sub(- #persist_suffix) == persist_suffix then
+                    -- Extract the binary name and save it to the session variable.
+                    bin_to_debug = choice:sub(1, #choice - #persist_suffix)
+                    persisted_binary = bin_to_debug
+                    vim.notify("Set " .. bin_to_debug .. " as default for this session.", vim.log.levels.INFO)
+                else
+                    bin_to_debug = choice
+                end
+                rust_build_and_debug(target_dir, bin_to_debug)
+            end
+        end)
+    end
+end
+
 cargo.debug_tests = function()
     vim.notify("Compiling workspace tests...", vim.log.levels.INFO)
     local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")

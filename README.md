@@ -63,19 +63,27 @@ Default configuration:
 
 These are the default keymaps.  
 
-| Keymap       | Action                 | Description                                                                                                                                                      |
-| :---         | :---                   | :---                                                                                                                                                             |
-| `<leader>ds` | Debug binary           | Build and debug a binary in your workspace. If multiple binaries exist, it opens a menu to let you choose, prioritizing the binary from the current crate.       |
-| `<leader>dt` | Debug tests            | Build and debug a test suite in your workspace. If multiple test suites exist, it opens a menu to let you choose, prioritizing the suite from the current crate. |
-| `<leader>de` | Debug examples         | Build and debug an example in your workspace. If multiple exampels exist, it opens a menu to let you choose, prioritizing any example currently being edited.    |
-| `<leader>b`  | Set breakpoint         | Set a breakpoint on the current line.                                                                                                                            |
-| `<leader>db` | Delete breakpoint      | Delete the breakpoint on the current line.                                                                                                                       |
-| `<leader>dx` | Delete all breakpoints | Delete all breakpoints.                                                                                                                                          |
-| `<leader>dp` | Pin thread             | Locks the GDB scheduler to the current thread, preventing the debugger from jumping between threads when stepping.                                               |
-| `<leader>dP` | Unpin thread           | Unlocks the GDB scheduler.                                                                                                                                       |
-| `<leader>dv` | Show simple variables  | Runs `:Vars` to inspect the state of _simple_ variables in the current scope.                                                                                    |
+  | Keymap       | Command                      | Action                 | Description                                                                                                        |
+  | :---         | :---                         | :---                   | :---                                                                                                               |
+  | `<leader>ds` | `cargo.debug_bin`            | Debug binary           | Build and debug a binary in your workspace.                                                                        |
+  | `<leader>dt` | `cargo.debug_tests`          | Debug tests            | Build and debug a test suite in your workspace.                                                                    |
+  | `<leader>de` | `cargo.debug_example`        | Debug examples         | Build and debug an example in your workspace.                                                                      |
+  | `<leader>b`  | `breakpoints.create`         | Set breakpoint         | Set a breakpoint on the current line.                                                                              |
+  | `<leader>db` | `breakpoints.delete_curline` | Delete breakpoint      | Delete the breakpoint on the current line.                                                                         |
+  | `<leader>dx` | `breakpoints.delete_all`     | Delete all breakpoints | Delete all breakpoints.                                                                                            |
+  | `<leader>dp` | `scheduler.lock`             | Pin thread             | Locks the GDB scheduler to the current thread, preventing the debugger from jumping between threads when stepping. |
+  | `<leader>dP` | `scheduler.unlock`           | Unpin thread           | Unlocks the GDB scheduler.                                                                                         |
+  | `<leader>dv` | `:Var`                       | Show simple variables  | Runs `:Var` to inspect the state of _simple_ variables in the current scope.                                       |
 
 If you'd rather customize your keymaps, set `use_default_keymaps = false`.
+
+## Selecting from multiple binaries/tests/examples
+
+**Binaries**: When debugging binaries in a cargo workspace with multiple binaries, you'll be prompted to choose which binary to debug.  If the crate you are currently editing (current buffer) has a binary, that binary will be moved to the top of the list.  You will also be able to select the desired binary with a suffix of `(persist)`, which saves the binary as the default and the next time you launch the debugger during the current editing session, that binary will be chosen automatically.
+
+**Tests**: When debugging tests in a cargo workspace with multiple crates, you will be prompted to choose which crate's tests to run.  Integration tests also appear in this list as if they were crates.  The crate you are currently editing (current buffer) will be moved to the top of the list..  Note that you do not choose individual tests as you would with a DAP debugger's "debuggables" list.
+
+**Examples**: When debugging examples in a cargo workspace with multiple examples, you will be prompted to choose which example module to run.  Integration tests also appear in this list as if they were crates.  Note: you do not choose individual tests as you would with a DAP debugger's "debuggables" list.
 
 ## Example workflows
 

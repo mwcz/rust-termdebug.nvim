@@ -9,7 +9,7 @@ M.delete_all = function()
 end
 
 -- clear breakpoints on the current line
-M.clear_curline = function()
+M.delete_curline = function()
     vim.cmd("Clear")
 end
 
