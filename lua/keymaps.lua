@@ -1,13 +1,14 @@
 local breakpoints = require("breakpoints")
 local scheduler = require("scheduler")
 local cargo = require("cargo")
+local process = require("process")
 
 local keymaps = {}
 
 keymaps.default = function()
     vim.keymap.set("n", "<leader>dt", cargo.debug_tests, { desc = "Debug tests", noremap = true, silent = true })
-    vim.keymap.set("n", "<leader>ds", cargo.debug_bin,
-        { desc = "Debug binary", noremap = true, silent = true })
+    vim.keymap.set("n", "<leader>ds", cargo.debug_bin, { desc = "Debug binary", noremap = true, silent = true })
+    vim.keymap.set("n", "<leader>da", process.debug_attach, { desc = "Debug process", noremap = true, silent = true })
     vim.keymap.set("n", "<leader>de", cargo.debug_example, { desc = "Debug example", noremap = true, silent = true })
     vim.keymap.set(
         "n",
