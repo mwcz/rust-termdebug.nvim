@@ -16,6 +16,9 @@ local options = {
         use_default_keymaps = true,
         -- Swap the gdb window and the program stdout window.
         swap_termdebug_windows = true,
+        -- The suffix to append to options in selection menus to pin that choice
+        -- for the current session. For example, " [pin]" or " 📌"
+        pin_suffix = " [pin]",
         -- This is used to configure Vim's built-in g:termdebug_config on
         -- startup. If you already have g:termdebug_config set in your config,
         -- this option will be ignored.

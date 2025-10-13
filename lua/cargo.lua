@@ -1,4 +1,5 @@
 local termdebug = require("termdebug")
+local options = require("options")
 
 local cargo = {}
 
@@ -134,12 +135,37 @@ cargo.metadata = function()
     return vim.json.decode(metadata_json)
 end
 
+-- Session-local variables to store pinned selections
+local pinned_binary = nil
+local pinned_test = nil
+local pinned_example = nil
+
 cargo.debug_bin = function()
     local metadata = cargo.metadata()
     if not metadata then
         return
     end
     local target_dir = metadata.target_directory
+
+    local function rust_build_and_debug(bin_crate_name)
+        local bin_path = target_dir .. "/debug/" .. bin_crate_name
+        local build_cmd = "cargo build --bin " .. bin_crate_name
+
+        vim.notify("Building binary: " .. bin_crate_name, vim.log.levels.INFO)
+
+        local original_win_id = vim.api.nvim_get_current_win()
+
+        run_build(build_cmd, function()
+            vim.notify("Debugging: " .. bin_path, vim.log.levels.INFO)
+            termdebug.start(bin_path, original_win_id)
+        end)
+    end
+
+    -- If there's a pinned binary, use it automatically
+    if pinned_binary then
+        rust_build_and_debug(pinned_binary)
+        return
+    end
 
     local all_binaries = {}
     for _, package in ipairs(metadata.packages) do
@@ -191,127 +217,56 @@ cargo.debug_bin = function()
     vim.list_extend(priority_bin_list, root_binaries)
     vim.list_extend(priority_bin_list, other_binaries)
 
-    local function rust_build_and_debug(bin_crate_name)
-        local bin_path = target_dir .. "/debug/" .. bin_crate_name
-        local build_cmd = "cargo build --bin " .. bin_crate_name
-
-        vim.notify("Building binary: " .. bin_crate_name, vim.log.levels.INFO)
-
-        local original_win_id = vim.api.nvim_get_current_win()
-
-        run_build(build_cmd, function()
-            vim.notify("Debugging: " .. bin_path, vim.log.levels.INFO)
-            termdebug.start(bin_path, original_win_id)
-        end)
-    end
-
     if #priority_bin_list == 1 then
         -- build and debug the one and only binary
         rust_build_and_debug(priority_bin_list[1].name)
     else
         -- choose which binary to build and debug
         local choices = {}
+        local pin_suffix = options.current.pin_suffix
+
+        -- Find the longest binary name for alignment
+        local max_len = 0
         for _, bin_info in ipairs(priority_bin_list) do
+            if #bin_info.name > max_len then
+                max_len = #bin_info.name
+            end
+        end
+
+        for _, bin_info in ipairs(priority_bin_list) do
+            local padding = string.rep(" ", max_len - #bin_info.name)
+            table.insert(choices, bin_info.name .. padding .. pin_suffix)
             table.insert(choices, bin_info.name)
-        end
-        vim.ui.select(choices, { prompt = "Select a binary to debug:" }, function(choice, idx)
-            if choice then
-                rust_build_and_debug(priority_bin_list[idx].name)
-            end
-        end)
-    end
-end
-
--- Use a session-local variable to store the persisted binary name.
-local persisted_binary = nil
-
-cargo.debug_bin = function()
-    local metadata = cargo.metadata()
-    local target_dir = metadata.target_directory
-
-    local function rust_build_and_debug(target_dir, bin_crate_name)
-        local bin_path = target_dir .. "/debug/" .. bin_crate_name
-        vim.notify("Running cargo build", vim.log.levels.INFO)
-        local build_output = vim.fn.system("cargo build --bin " .. bin_crate_name)
-        if vim.v.shell_error ~= 0 then
-            vim.notify("cargo build failed", vim.log.levels.ERROR)
-            print(build_output)
-            return
-        end
-        local original_win_id = vim.api.nvim_get_current_win()
-        vim.notify("Debugging: " .. bin_path, vim.log.levels.INFO)
-        termdebug.start(bin_path, original_win_id)
-    end
-
-    if persisted_binary then
-        rust_build_and_debug(target_dir, persisted_binary)
-        return
-    end
-
-    local all_binaries = {}
-    for _, package in ipairs(metadata.packages) do
-        for _, target in ipairs(package.targets) do
-            if vim.deep_equal(target.kind, { "bin" }) then
-                table.insert(all_binaries, { name = target.name, package_name = package.name })
-            end
-        end
-    end
-
-    if #all_binaries == 0 then
-        vim.notify("No binaries found in this project.", vim.log.levels.WARN)
-        return
-    end
-
-    local file_dir = vim.fn.expand("%:p:h")
-    local current_crate_name = cargo.current_crate_name(file_dir, metadata)
-
-    -- in the binary selection list, put binaries associated with the current file first
-    local sorted_binaries = {}
-    if current_crate_name then
-        local other_binaries = {}
-        for _, bin_info in ipairs(all_binaries) do
-            if bin_info.package_name == current_crate_name then
-                table.insert(sorted_binaries, bin_info)
-            else
-                table.insert(other_binaries, bin_info)
-            end
-        end
-        vim.list_extend(sorted_binaries, other_binaries)
-    else
-        sorted_binaries = all_binaries
-    end
-
-    if #sorted_binaries == 1 then
-        -- build and debug the one and only binary
-        rust_build_and_debug(target_dir, sorted_binaries[1].name)
-    else
-        -- choose which binary to build and debug
-        local choices = {}
-        local persist_suffix = " (persist)"
-        for _, bin_info in ipairs(sorted_binaries) do
-            table.insert(choices, bin_info.name)
-            table.insert(choices, bin_info.name .. persist_suffix)
         end
 
         vim.ui.select(choices, { prompt = "Select a binary to debug:" }, function(choice)
             if choice then
                 local bin_to_debug
-                -- Check if the user chose a "persist" option.
-                if choice:sub(- #persist_suffix) == persist_suffix then
-                    -- Extract the binary name and save it to the session variable.
-                    bin_to_debug = choice:sub(1, #choice - #persist_suffix)
-                    persisted_binary = bin_to_debug
-                    vim.notify("Set " .. bin_to_debug .. " as default for this session.", vim.log.levels.INFO)
+                -- Check if the user chose a "pin" option (strip padding and suffix)
+                local trimmed_choice = choice:gsub("%s+$", "")
+                if choice:sub(-#pin_suffix) == pin_suffix then
+                    -- Extract the binary name and save it to the session variable
+                    bin_to_debug = choice:match("^(%S+)")
+                    pinned_binary = bin_to_debug
+                    vim.notify("Pinned " .. bin_to_debug .. " as default for this session.", vim.log.levels.INFO)
                 else
                     bin_to_debug = choice
                 end
-                rust_build_and_debug(target_dir, bin_to_debug)
+                rust_build_and_debug(bin_to_debug)
             end
         end)
     end
 end
 
 cargo.debug_tests = function()
+    -- If there's a pinned test, use it automatically
+    if pinned_test then
+        local original_win_id = vim.api.nvim_get_current_win()
+        vim.notify("Debugging pinned test: " .. pinned_test.name, vim.log.levels.INFO)
+        termdebug.start(pinned_test.path, original_win_id)
+        return
+    end
+
     vim.notify("Compiling workspace tests...", vim.log.levels.INFO)
     local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
     local metadata = vim.json.decode(metadata_json)
@@ -388,31 +343,79 @@ cargo.debug_tests = function()
             termdebug.start(bin_path, original_win_id)
         else
             local choices = {}
+            local pin_suffix = options.current.pin_suffix
+
+            -- Find the longest display name for alignment
+            local max_len = 0
+            local display_names = {}
             for _, artifact in ipairs(test_artifacts) do
                 local kinds = table.concat(artifact.kind, ", ")
-                table.insert(choices, "Test module: " .. artifact.name .. " (" .. kinds .. ")")
+                local display_name = "Test module: " .. artifact.name .. " (" .. kinds .. ")"
+                table.insert(display_names, display_name)
+                if #display_name > max_len then
+                    max_len = #display_name
+                end
+            end
+
+            for i, display_name in ipairs(display_names) do
+                local padding = string.rep(" ", max_len - #display_name)
+                table.insert(choices, display_name .. padding .. pin_suffix)
+                table.insert(choices, display_name)
             end
 
             vim.ui.select(choices, { prompt = "Select a test binary to debug:" }, function(choice, idx)
                 if not choice then
                     return
                 end
-                local selected_path = test_artifacts[idx].path
-                vim.notify("Debugging test: " .. selected_path, vim.log.levels.INFO)
-                termdebug.start(selected_path, original_win_id)
+
+                -- Calculate the actual artifact index (accounting for pin entries)
+                local artifact_idx = math.ceil(idx / 2)
+                local selected_artifact = test_artifacts[artifact_idx]
+
+                -- Check if the user chose a "pin" option
+                if choice:sub(-#pin_suffix) == pin_suffix then
+                    pinned_test = {
+                        name = selected_artifact.name,
+                        path = selected_artifact.path,
+                    }
+                    vim.notify("Pinned test: " .. selected_artifact.name, vim.log.levels.INFO)
+                end
+
+                vim.notify("Debugging test: " .. selected_artifact.path, vim.log.levels.INFO)
+                termdebug.start(selected_artifact.path, original_win_id)
             end)
         end
     end)
 end
 
 cargo.debug_example = function()
-    vim.notify("Finding examples...", vim.log.levels.INFO)
-
     local metadata = cargo.metadata()
     if not metadata then
         return
     end
     local target_dir = metadata.target_directory
+
+    local function build_and_debug_example(example_name)
+        local example_path = target_dir .. "/debug/examples/" .. example_name
+        local build_cmd = "cargo build --example " .. example_name
+
+        vim.notify("Building example: " .. example_name, vim.log.levels.INFO)
+
+        local original_win_id = vim.api.nvim_get_current_win()
+
+        run_build(build_cmd, function()
+            vim.notify("Debugging example: " .. example_path, vim.log.levels.INFO)
+            termdebug.start(example_path, original_win_id)
+        end)
+    end
+
+    -- If there's a pinned example, use it automatically
+    if pinned_example then
+        build_and_debug_example(pinned_example)
+        return
+    end
+
+    vim.notify("Finding examples...", vim.log.levels.INFO)
 
     local examples = {}
     for _, package in ipairs(metadata.packages) do
@@ -445,73 +448,55 @@ cargo.debug_example = function()
         end
     end
 
-    local function build_and_debug_example(example_name)
-        local example_path = target_dir .. "/debug/examples/" .. example_name
-        local build_cmd = "cargo build --example " .. example_name
-
-        vim.notify("Building example: " .. example_name, vim.log.levels.INFO)
-
-        local original_win_id = vim.api.nvim_get_current_win()
-
-        run_build(build_cmd, function()
-            vim.notify("Debugging example: " .. example_path, vim.log.levels.INFO)
-            termdebug.start(example_path, original_win_id)
-        end)
-    end
-
     if #examples == 1 then
         build_and_debug_example(examples[1].name)
     else
         local choices = {}
+        local pin_suffix = options.current.pin_suffix
+
+        -- Find the longest display name for alignment
+        local max_len = 0
+        local display_names = {}
         for _, example in ipairs(examples) do
-            table.insert(choices, "Example: " .. example.name)
+            local display_name = "Example: " .. example.name
+            table.insert(display_names, display_name)
+            if #display_name > max_len then
+                max_len = #display_name
+            end
+        end
+
+        for i, display_name in ipairs(display_names) do
+            local padding = string.rep(" ", max_len - #display_name)
+            table.insert(choices, display_name .. padding .. pin_suffix)
+            table.insert(choices, display_name)
         end
 
         vim.ui.select(choices, { prompt = "Select an example to debug:" }, function(choice, idx)
-            if choice then
-                build_and_debug_example(examples[idx].name)
-            else
+            if not choice then
                 vim.notify("Debugger launch cancelled.", vim.log.levels.INFO)
+                return
             end
+
+            -- Calculate the actual example index (accounting for pin entries)
+            local example_idx = math.ceil(idx / 2)
+            local selected_example = examples[example_idx].name
+
+            -- Check if the user chose a "pin" option
+            if choice:sub(-#pin_suffix) == pin_suffix then
+                pinned_example = selected_example
+                vim.notify("Pinned example: " .. selected_example, vim.log.levels.INFO)
+            end
+
+            build_and_debug_example(selected_example)
         end)
     end
 end
 
-cargo.debug_process = function()
-    vim.notify("Searching for running processes...", vim.log.levels.INFO)
-
-    local process_lines = vim.fn.systemlist("ps -eo pid,args --no-headers")
-
-    if not process_lines or #process_lines == 0 then
-        vim.notify("Could not find any running processes.", vim.log.levels.WARN)
-        return
-    end
-
-    vim.ui.select(process_lines, { prompt = "Select process to attach to:" }, function(selected_process)
-        if not selected_process then
-            vim.notify("Attach cancelled.", vim.log.levels.INFO)
-            return
-        end
-
-        local parts = vim.split(vim.trim(selected_process), "%s+", { trimempty = true })
-        local pid = parts[1]
-        local program_path = parts[2]
-
-        if not pid or not program_path then
-            vim.notify("Could not parse PID and program path from selection.", vim.log.levels.ERROR)
-            return
-        end
-
-        vim.notify("Attaching to PID: " .. pid .. " (" .. program_path .. ")", vim.log.levels.INFO)
-
-        local original_win_id = vim.api.nvim_get_current_win()
-        termdebug.start(nil, original_win_id)
-
-        vim.defer_fn(function()
-            vim.fn.TermDebugSendCommand("attach " .. pid)
-            vim.notify("Attached to process. Use 'continue' in GDB to resume.", vim.log.levels.INFO)
-        end, 100)
-    end)
+cargo.clear_pins = function()
+    pinned_binary = nil
+    pinned_test = nil
+    pinned_example = nil
+    vim.notify("Cleared all pinned selections", vim.log.levels.INFO)
 end
 
 return cargo
