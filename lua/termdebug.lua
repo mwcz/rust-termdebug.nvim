@@ -10,7 +10,11 @@ termdebug.start = function(binary_path, original_win_id)
         vim.cmd("packadd termdebug")
     end
 
-    vim.cmd("Termdebug " .. vim.fn.fnameescape(binary_path))
+    if binary_path ~= nil then
+        vim.cmd("Termdebug " .. vim.fn.fnameescape(binary_path))
+    else
+        vim.cmd("Termdebug")
+    end
 
     -- swap the positions of the gdb repl and stdout window;
     -- I like having the gdb repl on the top or right
