@@ -4,6 +4,8 @@ local options = require("options")
 local cargo = {}
 
 local run_build = function(build_cmd, on_success)
+    local original_win_id = vim.api.nvim_get_current_win()
+
     vim.cmd("botright 15split | terminal " .. build_cmd)
 
     local job_id = vim.b.terminal_job_id
@@ -11,6 +13,10 @@ local run_build = function(build_cmd, on_success)
     local bufnr = vim.api.nvim_get_current_buf()
 
     vim.bo[bufnr].buflisted = false
+
+    -- move cursor to bottom of terminal so that new output will scroll into view as it arrives
+    vim.cmd("normal! G")
+    vim.api.nvim_set_current_win(original_win_id)
 
     -- set a buffer-local keymap to close the window with `q` or `<c-d>`, for both normal and terminal modes.
     -- TODO: make these keymaps configurable
