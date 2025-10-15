@@ -17,7 +17,7 @@ commands.create = function()
         desc = "Set a breakpoint at current line; same as :Break",
     })
 
-    vim.api.nvim_create_user_command("RustDebugClear", cargo.debug_tests, {
+    vim.api.nvim_create_user_command("RustDebugClear", breakpoints.delete_all, {
         desc = "Clear all breakpoints",
     })
 
