@@ -26,7 +26,7 @@ commands.create = function()
     })
 
     vim.api.nvim_create_user_command("RustDebugUnpinThread", scheduler.unlock, {
-        desc = "Unlock scheduler; debug all trheads",
+        desc = "Unlock scheduler; debug all threads",
     })
 end
 
