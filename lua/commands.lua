@@ -13,6 +13,10 @@ commands.create = function()
         desc = "Build and debug rust tests",
     })
 
+    vim.api.nvim_create_user_command("RustDebugBenches", cargo.debug_benches, {
+        desc = "Build and debug rust benchmarks",
+    })
+
     vim.api.nvim_create_user_command("RustDebugBreak", breakpoints.create, {
         desc = "Set a breakpoint at current line; same as :Break",
     })

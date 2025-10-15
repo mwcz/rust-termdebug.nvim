@@ -92,6 +92,56 @@ cargo.build_tests = function(on_complete)
     end)
 end
 
+-- build benchmarks and record the benchmark artifacts (benchmark binaries)
+cargo.build_benches = function(on_complete)
+    local user_cmd = "cargo bench --workspace --no-run --benches"
+
+    run_build(user_cmd, function()
+        vim.notify("Build successful, collecting benchmark artifacts...", vim.log.levels.INFO)
+        local json_cmd = "cargo bench --workspace --no-run --benches --message-format=json"
+        local cargo_output = vim.fn.system(json_cmd)
+
+        if vim.v.shell_error ~= 0 then
+            vim.notify("Error: Failed to collect benchmark artifacts after successful build.", vim.log.levels.ERROR)
+            on_complete(nil)
+            return
+        end
+
+        local bench_artifacts = {}
+        for _, line in ipairs(vim.split(cargo_output, "\n")) do
+            if line ~= "" then
+                local ok, artifact = pcall(vim.json.decode, line)
+                if
+                    ok
+                    and type(artifact) == "table"
+                    and artifact.reason == "compiler-artifact"
+                    and artifact.executable ~= nil
+                then
+                    -- Check if this is a bench target
+                    local is_bench = false
+                    if artifact.target and artifact.target.kind then
+                        for _, kind in ipairs(artifact.target.kind) do
+                            if kind == "bench" then
+                                is_bench = true
+                                break
+                            end
+                        end
+                    end
+
+                    if is_bench then
+                        table.insert(bench_artifacts, {
+                            name = artifact.target.name,
+                            path = artifact.executable,
+                            kind = artifact.target.kind,
+                        })
+                    end
+                end
+            end
+        end
+        on_complete(bench_artifacts)
+    end)
+end
+
 -- Finds the crate name for the currently active file by using cargo.
 cargo.current_crate_name = function(file_dir, metadata)
     if file_dir == "" then
@@ -139,6 +189,7 @@ end
 local pinned_binary = nil
 local pinned_test = nil
 local pinned_example = nil
+local pinned_bench = nil
 
 cargo.debug_bin = function()
     local metadata = cargo.metadata()
@@ -495,10 +546,121 @@ cargo.debug_example = function()
     end
 end
 
+cargo.debug_benches = function()
+    vim.notify("Compiling workspace benchmarks...", vim.log.levels.INFO)
+    local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
+    local metadata = vim.json.decode(metadata_json)
+
+    cargo.build_benches(function(bench_artifacts)
+        if bench_artifacts == nil then
+            return
+        end
+
+        if #bench_artifacts == 0 then
+            vim.notify("Failed to find any benchmark executables.", vim.log.levels.ERROR)
+            return
+        end
+
+        if #bench_artifacts > 1 then
+            local file_path = vim.fn.expand("%:p")
+            local file_dir = vim.fn.expand("%:p:h")
+            local current_artifact_idx
+
+            -- check if this is a benchmark file (/benches/)
+            if string.find(file_path, "/benches/", 1, true) then
+                local bench_name = vim.fn.fnamemodify(file_path, ":t:r") -- Get filename without extension
+                for i, artifact in ipairs(bench_artifacts) do
+                    if artifact.name == bench_name then
+                        current_artifact_idx = i
+                        break
+                    end
+                end
+            else
+                local current_crate_name = cargo.current_crate_name(file_dir, metadata)
+                if current_crate_name then
+                    for i, artifact in ipairs(bench_artifacts) do
+                        if artifact.name == current_crate_name then
+                            current_artifact_idx = i
+                            break
+                        end
+                    end
+                end
+            end
+
+            if current_artifact_idx then
+                local prioritized_artifact = table.remove(bench_artifacts, current_artifact_idx)
+                table.insert(bench_artifacts, 1, prioritized_artifact)
+            end
+        end
+
+        -- If there's a pinned benchmark, find and use it automatically
+        if pinned_bench then
+            local original_win_id = vim.api.nvim_get_current_win()
+            for _, artifact in ipairs(bench_artifacts) do
+                if artifact.name == pinned_bench then
+                    vim.notify("Debugging pinned benchmark: " .. artifact.name, vim.log.levels.INFO)
+                    termdebug.start(artifact.path, original_win_id)
+                    return
+                end
+            end
+            -- If pinned benchmark not found, notify and continue to selection
+            vim.notify("Pinned benchmark '" .. pinned_bench .. "' not found, showing selection...", vim.log.levels.WARN)
+        end
+
+        local original_win_id = vim.api.nvim_get_current_win()
+        if #bench_artifacts == 1 then
+            local bin_path = bench_artifacts[1].path
+            vim.notify("Debugging benchmark: " .. bin_path, vim.log.levels.INFO)
+            termdebug.start(bin_path, original_win_id)
+        else
+            local choices = {}
+            local pin_suffix = options.current.pin_suffix
+
+            -- Find the longest display name for alignment
+            local max_len = 0
+            local display_names = {}
+            for _, artifact in ipairs(bench_artifacts) do
+                local kinds = table.concat(artifact.kind, ", ")
+                local display_name = "Benchmark: " .. artifact.name .. " (" .. kinds .. ")"
+                table.insert(display_names, display_name)
+                if #display_name > max_len then
+                    max_len = #display_name
+                end
+            end
+
+            for i, display_name in ipairs(display_names) do
+                local padding = string.rep(" ", max_len - #display_name)
+                table.insert(choices, display_name .. padding .. pin_suffix)
+                table.insert(choices, display_name)
+            end
+
+            vim.ui.select(choices, { prompt = "Select a benchmark to debug:" }, function(choice, idx)
+                if not choice then
+                    return
+                end
+
+                -- Calculate the actual artifact index (accounting for pin entries)
+                local artifact_idx = math.ceil(idx / 2)
+                local selected_artifact = bench_artifacts[artifact_idx]
+
+                -- Check if the user chose a "pin" option
+                if choice:sub(-#pin_suffix) == pin_suffix then
+                    pinned_bench = selected_artifact.name
+                    vim.notify("Pinned benchmark: " .. selected_artifact.name, vim.log.levels.INFO)
+                end
+
+                vim.notify("Debugging benchmark: " .. selected_artifact.path, vim.log.levels.INFO)
+                termdebug.start(selected_artifact.path, original_win_id)
+            end)
+        end
+    end)
+end
+
 cargo.clear_pins = function()
     pinned_binary = nil
     pinned_test = nil
     pinned_example = nil
+    pinned_bench = nil
     vim.notify("Cleared all pinned selections", vim.log.levels.INFO)
 end
 

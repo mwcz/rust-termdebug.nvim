@@ -68,6 +68,7 @@ These are the default keymaps.
   | `<leader>ds` | `cargo.debug_bin`            | Debug binary           | Build and debug a binary in your workspace.                                                                        |
   | `<leader>dt` | `cargo.debug_tests`          | Debug tests            | Build and debug a test suite in your workspace.                                                                    |
   | `<leader>de` | `cargo.debug_example`        | Debug examples         | Build and debug an example in your workspace.                                                                      |
+  | `<leader>dn` | `cargo.debug_benches`        | Debug benchmarks       | Build and debug a benchmark in your workspace. See [Debugging benchmarks](#debugging-benchmarks) for setup.        |
   | `<leader>b`  | `breakpoints.create`         | Set breakpoint         | Set a breakpoint on the current line.                                                                              |
   | `<leader>db` | `breakpoints.delete_curline` | Delete breakpoint      | Delete the breakpoint on the current line.                                                                         |
   | `<leader>dx` | `breakpoints.delete_all`     | Delete all breakpoints | Delete all breakpoints.                                                                                            |
@@ -77,13 +78,15 @@ These are the default keymaps.
 
 If you'd rather customize your keymaps, set `use_default_keymaps = false`.
 
-## Selecting from multiple binaries/tests/examples
+## Selecting from multiple binaries/tests/examples/benchmarks
 
-**Binaries**: When debugging binaries in a cargo workspace with multiple binaries, you'll be prompted to choose which binary to debug.  If the crate you are currently editing (current buffer) has a binary, that binary will be moved to the top of the list.  You will also be able to select the desired binary with a suffix of `(persist)`, which saves the binary as the default and the next time you launch the debugger during the current editing session, that binary will be chosen automatically.
+When debugging a cargo workspace with multiple targets, you'll be prompted to choose which one to debug. The target corresponding to the file you are currently editing will be moved to the top of the list for convenience.
 
-**Tests**: When debugging tests in a cargo workspace with multiple crates, you will be prompted to choose which crate's tests to run.  Integration tests also appear in this list as if they were crates.  The crate you are currently editing (current buffer) will be moved to the top of the list..  Note that you do not choose individual tests as you would with a DAP debugger's "debuggables" list.
+You can also select any target with the `[pin]` suffix to save it as the default for the current session. The next time you launch the debugger during that session, the pinned target will be used automatically and always recompiled.
 
-**Examples**: When debugging examples in a cargo workspace with multiple examples, you will be prompted to choose which example module to run.  Integration tests also appear in this list as if they were crates.  Note: you do not choose individual tests as you would with a DAP debugger's "debuggables" list.
+- Binaries are listed by their filename.
+- Unit tests are listed by their crate name.  Note that you do not choose individual tests as you would with a DAP debugger's "debuggables" list.  To run specific test(s), use `run test_name` within the GDB buffer.
+- Examples, benchmarks, and integration tests are listed by their filename (with `.rs` omitted).
 
 ## Example workflows
 
@@ -103,6 +106,22 @@ If you'd rather customize your keymaps, set `use_default_keymaps = false`.
  4. Move into the gdb window and enter `r` to run all the tests for the chosen module, or use a name filter like you'd pass to `cargo test`, eg `r my_test_name`
  5. Use gdb as usual to debug the test(s).
 
+## Debugging benchmarks
+
+By default, Rust benchmarks are compiled without debug symbols. To enable debugging benchmarks, add this minimal profile configuration to your `Cargo.toml`:
+
+```toml
+[profile.bench]
+debug = true
+```
+
+This enables debug symbols while keeping all other benchmark optimizations intact. Once configured, you can debug benchmarks just like tests:
+
+ 1. Edit a benchmark file.
+ 2. Press `<leader>dn` to debug benchmarks.  If multiple benchmarks exist, choose the one you want to debug.  The one being edited will appear at the top of the list.
+ 3. Move to a line of interest and press `<leader>b` to set a breakpoint.
+ 4. Move into the gdb window and enter `r` to run the benchmark, or use a name filter like you'd pass to `cargo bench`, eg `r my_bench_name`
+ 5. Use gdb as usual to debug the benchmark.
 
 [termdebug]: https://vimhelp.org/terminal.txt.html#terminal-debug
 [rustup]: https://rustup.rs/

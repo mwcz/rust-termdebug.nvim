@@ -10,6 +10,7 @@ keymaps.default = function()
     vim.keymap.set("n", "<leader>ds", cargo.debug_bin, { desc = "Debug binary", noremap = true, silent = true })
     vim.keymap.set("n", "<leader>da", process.debug_attach, { desc = "Debug process", noremap = true, silent = true })
     vim.keymap.set("n", "<leader>de", cargo.debug_example, { desc = "Debug example", noremap = true, silent = true })
+    vim.keymap.set("n", "<leader>dn", cargo.debug_benches, { desc = "Debug benchmarks", noremap = true, silent = true })
     vim.keymap.set(
         "n",
         "<leader>dx",
