@@ -259,14 +259,6 @@ cargo.debug_bin = function()
 end
 
 cargo.debug_tests = function()
-    -- If there's a pinned test, use it automatically
-    if pinned_test then
-        local original_win_id = vim.api.nvim_get_current_win()
-        vim.notify("Debugging pinned test: " .. pinned_test.name, vim.log.levels.INFO)
-        termdebug.start(pinned_test.path, original_win_id)
-        return
-    end
-
     vim.notify("Compiling workspace tests...", vim.log.levels.INFO)
     local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
     local metadata = vim.json.decode(metadata_json)
@@ -335,6 +327,20 @@ cargo.debug_tests = function()
             end
         end
 
+        -- If there's a pinned test, find and use it automatically
+        if pinned_test then
+            local original_win_id = vim.api.nvim_get_current_win()
+            for _, artifact in ipairs(test_artifacts) do
+                if artifact.name == pinned_test then
+                    vim.notify("Debugging pinned test: " .. artifact.name, vim.log.levels.INFO)
+                    termdebug.start(artifact.path, original_win_id)
+                    return
+                end
+            end
+            -- If pinned test not found, notify and continue to selection
+            vim.notify("Pinned test '" .. pinned_test .. "' not found, showing selection...", vim.log.levels.WARN)
+        end
+
         -- The rest of the logic for selecting and launching the debugger remains the same.
         local original_win_id = vim.api.nvim_get_current_win()
         if #test_artifacts == 1 then
@@ -374,10 +380,7 @@ cargo.debug_tests = function()
 
                 -- Check if the user chose a "pin" option
                 if choice:sub(-#pin_suffix) == pin_suffix then
-                    pinned_test = {
-                        name = selected_artifact.name,
-                        path = selected_artifact.path,
-                    }
+                    pinned_test = selected_artifact.name
                     vim.notify("Pinned test: " .. selected_artifact.name, vim.log.levels.INFO)
                 end
 
