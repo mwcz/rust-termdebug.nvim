@@ -1,6 +1,7 @@
 local breakpoints = require("breakpoints")
 local scheduler = require("scheduler")
 local cargo = require("cargo")
+local termdebug = require("termdebug")
 
 local commands = {}
 
@@ -31,6 +32,18 @@ commands.create = function()
 
     vim.api.nvim_create_user_command("RustDebugUnpinThread", scheduler.unlock, {
         desc = "Unlock scheduler; debug all threads",
+    })
+
+    vim.api.nvim_create_user_command("RustDebugHide", termdebug.hide, {
+        desc = "Hide termdebug panels",
+    })
+
+    vim.api.nvim_create_user_command("RustDebugShow", termdebug.show, {
+        desc = "Show termdebug panels",
+    })
+
+    vim.api.nvim_create_user_command("RustDebugToggle", termdebug.toggle, {
+        desc = "Toggle termdebug panels visibility",
     })
 end
 
