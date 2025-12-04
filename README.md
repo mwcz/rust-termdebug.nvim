@@ -123,6 +123,18 @@ This enables debug symbols while keeping all other benchmark optimizations intac
  4. Move into the gdb window and enter `r` to run the benchmark, or use a name filter like you'd pass to `cargo bench`, eg `r my_bench_name`
  5. Use gdb as usual to debug the benchmark.
 
+## Development
+
+### Running Tests
+
+The plugin includes a basic test suite using [plenary.nvim](https://github.com/nvim-lua/plenary.nvim):
+
+```bash
+make test
+```
+
+See [tests/README.md](tests/README.md) for more details.
+
 [termdebug]: https://vimhelp.org/terminal.txt.html#terminal-debug
 [rustup]: https://rustup.rs/
 [gdb]: https://sourceware.org/gdb/
