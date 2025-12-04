@@ -21,7 +21,7 @@ keymaps.default = function()
     vim.keymap.set("n", "<leader>du", cargo.clear_pins, { desc = "Clear pinned selections", noremap = true, silent = true })
     vim.keymap.set("n", "<leader>dv", "<cmd>Var<cr>", { desc = "Show vars pane" })
     vim.keymap.set("n", "<leader>dP", scheduler.unlock, { desc = "Unpin thread" })
-    vim.keymap.set("n", "<leader>b", breakpoints.create, { desc = "Set breakpoint", remap = true, silent = true })
+    vim.keymap.set("n", "<leader>b", breakpoints.toggle, { desc = "Toggle breakpoint", remap = true, silent = true })
     vim.keymap.set(
         "n",
         "<leader>db",

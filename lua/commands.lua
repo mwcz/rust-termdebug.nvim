@@ -25,6 +25,10 @@ commands.create = function()
         desc = "Clear all breakpoints",
     })
 
+    vim.api.nvim_create_user_command("RustDebugReload", cargo.rebuild_and_reload, {
+        desc = "Rebuild code and reload binary in active debug session",
+    })
+
     vim.api.nvim_create_user_command("RustDebugPinThread", scheduler.lock, {
         desc = "Lock scheduler; debug current thread",
     })

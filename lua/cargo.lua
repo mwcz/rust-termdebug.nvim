@@ -1,7 +1,16 @@
 local termdebug = require("termdebug")
+local breakpoints = require("breakpoints")
 local options = require("options")
 
 local cargo = {}
+
+-- Debug session types
+local DebugType = {
+    BINARY = "binary",
+    TEST = "test",
+    EXAMPLE = "example",
+    BENCH = "bench",
+}
 
 local run_build = function(build_cmd, on_success)
     local original_win_id = vim.api.nvim_get_current_win()
@@ -198,6 +207,13 @@ local pinned_example = nil
 local pinned_bench = nil
 
 cargo.debug_bin = function()
+    -- If there's an active binary session, rebuild and reload instead
+    local session = termdebug.get_active_session()
+    if session and session.type == DebugType.BINARY then
+        cargo.rebuild_and_reload()
+        return
+    end
+
     local metadata = cargo.metadata()
     if not metadata then
         return
@@ -214,7 +230,12 @@ cargo.debug_bin = function()
 
         run_build(build_cmd, function()
             vim.notify("Debugging: " .. bin_path, vim.log.levels.INFO)
-            termdebug.start(bin_path, original_win_id)
+            termdebug.start(bin_path, {
+                original_win_id = original_win_id,
+                type = DebugType.BINARY,
+                name = bin_crate_name,
+                build_cmd = build_cmd,
+            })
         end)
     end
 
@@ -316,6 +337,13 @@ cargo.debug_bin = function()
 end
 
 cargo.debug_tests = function()
+    -- If there's an active test session, rebuild and reload instead
+    local session = termdebug.get_active_session()
+    if session and session.type == DebugType.TEST then
+        cargo.rebuild_and_reload()
+        return
+    end
+
     vim.notify("Compiling workspace tests...", vim.log.levels.INFO)
     local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
     local metadata = vim.json.decode(metadata_json)
@@ -390,7 +418,11 @@ cargo.debug_tests = function()
             for _, artifact in ipairs(test_artifacts) do
                 if artifact.name == pinned_test then
                     vim.notify("Debugging pinned test: " .. artifact.name, vim.log.levels.INFO)
-                    termdebug.start(artifact.path, original_win_id)
+                    termdebug.start(artifact.path, {
+                        original_win_id = original_win_id,
+                        type = DebugType.TEST,
+                        name = artifact.name,
+                    })
                     return
                 end
             end
@@ -401,9 +433,14 @@ cargo.debug_tests = function()
         -- The rest of the logic for selecting and launching the debugger remains the same.
         local original_win_id = vim.api.nvim_get_current_win()
         if #test_artifacts == 1 then
-            local bin_path = test_artifacts[1].path
+            local artifact = test_artifacts[1]
+            local bin_path = artifact.path
             vim.notify("Debugging test: " .. bin_path, vim.log.levels.INFO)
-            termdebug.start(bin_path, original_win_id)
+            termdebug.start(bin_path, {
+                original_win_id = original_win_id,
+                type = DebugType.TEST,
+                name = artifact.name,
+            })
         else
             local choices = {}
             local pin_suffix = options.current.pin_suffix
@@ -442,13 +479,24 @@ cargo.debug_tests = function()
                 end
 
                 vim.notify("Debugging test: " .. selected_artifact.path, vim.log.levels.INFO)
-                termdebug.start(selected_artifact.path, original_win_id)
+                termdebug.start(selected_artifact.path, {
+                    original_win_id = original_win_id,
+                    type = DebugType.TEST,
+                    name = selected_artifact.name,
+                })
             end)
         end
     end)
 end
 
 cargo.debug_example = function()
+    -- If there's an active example session, rebuild and reload instead
+    local session = termdebug.get_active_session()
+    if session and session.type == DebugType.EXAMPLE then
+        cargo.rebuild_and_reload()
+        return
+    end
+
     local metadata = cargo.metadata()
     if not metadata then
         return
@@ -465,7 +513,12 @@ cargo.debug_example = function()
 
         run_build(build_cmd, function()
             vim.notify("Debugging example: " .. example_path, vim.log.levels.INFO)
-            termdebug.start(example_path, original_win_id)
+            termdebug.start(example_path, {
+                original_win_id = original_win_id,
+                type = DebugType.EXAMPLE,
+                name = example_name,
+                build_cmd = build_cmd,
+            })
         end)
     end
 
@@ -553,6 +606,13 @@ cargo.debug_example = function()
 end
 
 cargo.debug_benches = function()
+    -- If there's an active benchmark session, rebuild and reload instead
+    local session = termdebug.get_active_session()
+    if session and session.type == DebugType.BENCH then
+        cargo.rebuild_and_reload()
+        return
+    end
+
     vim.notify("Compiling workspace benchmarks...", vim.log.levels.INFO)
     local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1")
     local metadata = vim.json.decode(metadata_json)
@@ -605,7 +665,11 @@ cargo.debug_benches = function()
             for _, artifact in ipairs(bench_artifacts) do
                 if artifact.name == pinned_bench then
                     vim.notify("Debugging pinned benchmark: " .. artifact.name, vim.log.levels.INFO)
-                    termdebug.start(artifact.path, original_win_id)
+                    termdebug.start(artifact.path, {
+                        original_win_id = original_win_id,
+                        type = DebugType.BENCH,
+                        name = artifact.name,
+                    })
                     return
                 end
             end
@@ -615,9 +679,14 @@ cargo.debug_benches = function()
 
         local original_win_id = vim.api.nvim_get_current_win()
         if #bench_artifacts == 1 then
-            local bin_path = bench_artifacts[1].path
+            local artifact = bench_artifacts[1]
+            local bin_path = artifact.path
             vim.notify("Debugging benchmark: " .. bin_path, vim.log.levels.INFO)
-            termdebug.start(bin_path, original_win_id)
+            termdebug.start(bin_path, {
+                original_win_id = original_win_id,
+                type = DebugType.BENCH,
+                name = artifact.name,
+            })
         else
             local choices = {}
             local pin_suffix = options.current.pin_suffix
@@ -656,7 +725,11 @@ cargo.debug_benches = function()
                 end
 
                 vim.notify("Debugging benchmark: " .. selected_artifact.path, vim.log.levels.INFO)
-                termdebug.start(selected_artifact.path, original_win_id)
+                termdebug.start(selected_artifact.path, {
+                    original_win_id = original_win_id,
+                    type = DebugType.BENCH,
+                    name = selected_artifact.name,
+                })
             end)
         end
     end)
@@ -668,6 +741,82 @@ cargo.clear_pins = function()
     pinned_example = nil
     pinned_bench = nil
     vim.notify("Cleared all pinned selections", vim.log.levels.INFO)
+end
+
+cargo.rebuild_and_reload = function()
+    local session = termdebug.get_active_session()
+
+    if not session then
+        vim.notify("No active debug session to reload", vim.log.levels.WARN)
+        return
+    end
+
+    if session.type == DebugType.BINARY and session.build_cmd then
+        -- For binaries, we have a build_cmd we can use
+        vim.notify("Rebuilding binary: " .. session.name, vim.log.levels.INFO)
+        run_build(session.build_cmd, function()
+            vim.notify("Reloading binary: " .. session.path, vim.log.levels.INFO)
+            -- Send file command to reload the binary
+            vim.fn.TermDebugSendCommand("file " .. session.path)
+            -- Delete all GDB breakpoints
+            vim.fn.TermDebugSendCommand("d")
+            -- Restore breakpoints from extmarks
+            breakpoints.restore_all()
+        end)
+    elseif session.type == DebugType.TEST then
+        -- For tests, rebuild all tests
+        vim.notify("Rebuilding tests...", vim.log.levels.INFO)
+        cargo.build_tests(function(test_artifacts)
+            if not test_artifacts then
+                return
+            end
+
+            -- Find the matching artifact
+            for _, artifact in ipairs(test_artifacts) do
+                if artifact.name == session.name then
+                    vim.notify("Reloading test: " .. artifact.path, vim.log.levels.INFO)
+                    vim.fn.TermDebugSendCommand("file " .. artifact.path)
+                    vim.fn.TermDebugSendCommand("d")
+                    breakpoints.restore_all()
+                    return
+                end
+            end
+
+            vim.notify("Could not find test artifact: " .. session.name, vim.log.levels.ERROR)
+        end)
+    elseif session.type == DebugType.EXAMPLE and session.build_cmd then
+        -- For examples, we have a build_cmd
+        vim.notify("Rebuilding example: " .. session.name, vim.log.levels.INFO)
+        run_build(session.build_cmd, function()
+            vim.notify("Reloading example: " .. session.path, vim.log.levels.INFO)
+            vim.fn.TermDebugSendCommand("file " .. session.path)
+            vim.fn.TermDebugSendCommand("d")
+            breakpoints.restore_all()
+        end)
+    elseif session.type == DebugType.BENCH then
+        -- For benchmarks, rebuild all benchmarks
+        vim.notify("Rebuilding benchmarks...", vim.log.levels.INFO)
+        cargo.build_benches(function(bench_artifacts)
+            if not bench_artifacts then
+                return
+            end
+
+            -- Find the matching artifact
+            for _, artifact in ipairs(bench_artifacts) do
+                if artifact.name == session.name then
+                    vim.notify("Reloading benchmark: " .. artifact.path, vim.log.levels.INFO)
+                    vim.fn.TermDebugSendCommand("file " .. artifact.path)
+                    vim.fn.TermDebugSendCommand("d")
+                    breakpoints.restore_all()
+                    return
+                end
+            end
+
+            vim.notify("Could not find benchmark artifact: " .. session.name, vim.log.levels.ERROR)
+        end)
+    else
+        vim.notify("Cannot rebuild session type: " .. tostring(session.type), vim.log.levels.ERROR)
+    end
 end
 
 return cargo
