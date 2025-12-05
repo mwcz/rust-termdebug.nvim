@@ -19,6 +19,9 @@ local options = {
         -- The suffix to append to options in selection menus to pin that choice
         -- for the current session. For example, " [pin]" or " 📌"
         pin_suffix = " [pin]",
+        -- Persist breakpoints across Neovim sessions in a workspace-local file
+        -- (.rust-termdebug-breakpoints.json in the workspace root)
+        persist_breakpoints = false,
         -- This is used to configure Vim's built-in g:termdebug_config on
         -- startup. If you already have g:termdebug_config set in your config,
         -- this option will be ignored.

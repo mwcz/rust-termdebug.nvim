@@ -9,6 +9,36 @@ local breakpoint_marks = {}
 -- Track which buffers have the deletion handler set up
 local buffers_with_handlers = {}
 
+-- Persistence settings
+local persistence_enabled = false
+
+-- Get the workspace-specific persistence file path
+local function get_persistence_file()
+    local workspace_root
+
+    -- Try to get the cargo workspace root
+    local metadata_json = vim.fn.system("cargo metadata --no-deps --format-version=1 2>/dev/null")
+    if vim.v.shell_error == 0 then
+        local ok, metadata = pcall(vim.json.decode, metadata_json)
+        if ok and metadata and metadata.workspace_root then
+            workspace_root = metadata.workspace_root
+        end
+    end
+
+    -- Fallback to current directory if not in a cargo workspace
+    if not workspace_root then
+        workspace_root = vim.fn.getcwd()
+    end
+
+    -- Create .rust-termdebug.nvim directory if it doesn't exist
+    local dir = workspace_root .. "/.rust-termdebug.nvim"
+    if vim.fn.isdirectory(dir) == 0 then
+        vim.fn.mkdir(dir, "p")
+    end
+
+    return dir .. "/breakpoints.json"
+end
+
 -- Set up buffer-local autocmd to clean up extmarks when lines are deleted
 local function setup_buffer_deletion_handler(bufnr)
     if buffers_with_handlers[bufnr] then
@@ -60,11 +90,6 @@ local function cleanup_buffer_handler(bufnr)
     end
 end
 
--- Check if termdebug is currently running
-local function is_termdebug_running()
-    return vim.fn.exists("*TermDebugSendCommand") ~= 0 and vim.fn.exists("g:termdebug_running") ~= 0
-end
-
 -- Create a breakpoint and track it with an extmark
 M.create = function()
     local bufnr = vim.api.nvim_get_current_buf()
@@ -86,10 +111,12 @@ M.create = function()
 
     breakpoint_marks[bufnr][line] = extmark_id
 
-    -- Only create the actual GDB breakpoint if termdebug is running
-    if is_termdebug_running() then
-        vim.cmd("Break")
-    end
+    -- Try to create the actual GDB breakpoint if termdebug is running
+    -- Use pcall to avoid errors if termdebug isn't active
+    pcall(vim.cmd, "Break")
+
+    -- Save to disk immediately
+    M.save_to_disk()
 end
 
 M.delete_all = function()
@@ -103,6 +130,9 @@ M.delete_all = function()
         cleanup_buffer_handler(bufnr)
     end
     breakpoint_marks = {}
+
+    -- Save to disk immediately
+    M.save_to_disk()
 end
 
 -- clear breakpoints on the current line
@@ -117,6 +147,9 @@ M.delete_curline = function()
         vim.api.nvim_buf_del_extmark(bufnr, ns_id, breakpoint_marks[bufnr][line])
         breakpoint_marks[bufnr][line] = nil
     end
+
+    -- Save to disk immediately
+    M.save_to_disk()
 end
 
 -- Toggle breakpoint on the current line
@@ -173,6 +206,103 @@ M.restore_all = function()
     end
 
     vim.notify("Restored " .. #breakpoints .. " breakpoint(s)", vim.log.levels.INFO)
+end
+
+-- Save breakpoints to disk for persistence across sessions
+M.save_to_disk = function()
+    if not persistence_enabled then
+        return
+    end
+
+    local breakpoints_to_save = {}
+
+    -- Collect all breakpoint locations from extmarks
+    for bufnr, marks in pairs(breakpoint_marks) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+            local bufname = vim.api.nvim_buf_get_name(bufnr)
+            -- Only save breakpoints for named buffers (files on disk)
+            if bufname ~= "" then
+                for _, extmark_id in pairs(marks) do
+                    local mark = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns_id, extmark_id, {})
+                    if mark and #mark > 0 then
+                        table.insert(breakpoints_to_save, {
+                            file = bufname,
+                            line = mark[1] + 1, -- Convert to 1-indexed
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    -- Write to file
+    local file = io.open(get_persistence_file(), "w")
+    if file then
+        file:write(vim.json.encode(breakpoints_to_save))
+        file:close()
+    end
+end
+
+-- Load breakpoints from disk and create extmarks
+M.load_from_disk = function()
+    if not persistence_enabled then
+        return
+    end
+
+    local file = io.open(get_persistence_file(), "r")
+    if not file then
+        return
+    end
+
+    local content = file:read("*a")
+    file:close()
+
+    if content == "" then
+        return
+    end
+
+    local ok, breakpoints = pcall(vim.json.decode, content)
+    if not ok or not breakpoints then
+        return
+    end
+
+    -- Create extmarks for each saved breakpoint
+    for _, bp in ipairs(breakpoints) do
+        -- Check if the file exists
+        if vim.fn.filereadable(bp.file) == 1 then
+            -- Load the buffer if it's not already loaded
+            local bufnr = vim.fn.bufnr(bp.file)
+            if bufnr == -1 then
+                bufnr = vim.fn.bufadd(bp.file)
+            end
+
+            -- Initialize buffer tracking if needed
+            if not breakpoint_marks[bufnr] then
+                breakpoint_marks[bufnr] = {}
+            end
+
+            -- Set up deletion handler for this buffer
+            setup_buffer_deletion_handler(bufnr)
+
+            -- Create extmark (0-indexed line)
+            local line = bp.line - 1
+            local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns_id, line, 0, {
+                sign_text = "●",
+                sign_hl_group = "DiagnosticError",
+            })
+
+            breakpoint_marks[bufnr][line] = extmark_id
+        end
+    end
+
+    if #breakpoints > 0 then
+        vim.notify("Loaded " .. #breakpoints .. " breakpoint(s) from previous session", vim.log.levels.INFO)
+    end
+end
+
+-- Enable or disable breakpoint persistence
+M.set_persistence = function(enabled)
+    persistence_enabled = enabled
 end
 
 return M

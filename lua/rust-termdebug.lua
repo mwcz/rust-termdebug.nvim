@@ -31,6 +31,26 @@ rust_termdebug.setup = function(options_in)
     if options.current.use_default_keymaps then
         keymaps.default()
     end
+
+    -- Set up breakpoint persistence if enabled
+    if options.current.persist_breakpoints then
+        breakpoints.set_persistence(true)
+
+        -- Load breakpoints from previous session
+        vim.defer_fn(function()
+            breakpoints.load_from_disk()
+        end, 100) -- Delay to ensure buffers are loaded
+
+        -- Save breakpoints on exit
+        vim.api.nvim_create_autocmd("VimLeavePre", {
+            callback = function()
+                breakpoints.save_to_disk()
+            end,
+            desc = "Save rust-termdebug breakpoints before exit",
+        })
+    else
+        breakpoints.set_persistence(false)
+    end
 end
 
 return rust_termdebug
