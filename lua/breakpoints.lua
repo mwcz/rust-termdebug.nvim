@@ -60,11 +60,13 @@ local function cleanup_buffer_handler(bufnr)
     end
 end
 
+-- Check if termdebug is currently running
+local function is_termdebug_running()
+    return vim.fn.exists("*TermDebugSendCommand") ~= 0 and vim.fn.exists("g:termdebug_running") ~= 0
+end
+
 -- Create a breakpoint and track it with an extmark
 M.create = function()
-    vim.cmd("Break")
-
-    -- Track the breakpoint with an extmark
     local bufnr = vim.api.nvim_get_current_buf()
     local line = vim.api.nvim_win_get_cursor(0)[1] - 1 -- 0-indexed
 
@@ -83,6 +85,11 @@ M.create = function()
     })
 
     breakpoint_marks[bufnr][line] = extmark_id
+
+    -- Only create the actual GDB breakpoint if termdebug is running
+    if is_termdebug_running() then
+        vim.cmd("Break")
+    end
 end
 
 M.delete_all = function()
@@ -157,7 +164,6 @@ M.restore_all = function()
     local breakpoints = M.get_all()
 
     if #breakpoints == 0 then
-        vim.notify("No breakpoints to restore", vim.log.levels.INFO)
         return
     end
 

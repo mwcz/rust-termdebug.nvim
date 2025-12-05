@@ -1,4 +1,5 @@
 local options = require("options")
+local breakpoints = require("breakpoints")
 
 local termdebug = {}
 
@@ -34,6 +35,11 @@ termdebug.start = function(binary_path, opts)
         vim.fn.TermDebugSendCommand(cmd)
     end
 
+    -- Restore any breakpoints that were set before the debugger started
+    vim.defer_fn(function()
+        breakpoints.restore_all()
+    end, 100) -- Give termdebug time to fully initialize
+
     -- optionally move the cursor back to the original window
     if options.current.keep_cursor_in_place and opts.original_win_id then
         vim.defer_fn(function()
@@ -51,6 +57,16 @@ termdebug.start = function(binary_path, opts)
             path = binary_path,
             build_cmd = opts.build_cmd,
         }
+
+        -- Set up autocmd to clear session when debugger closes
+        -- The GDB buffer is named with the pattern */rust-gdb
+        vim.api.nvim_create_autocmd("BufDelete", {
+            pattern = "*/rust-gdb",
+            once = true,
+            callback = function()
+                active_debug_session = nil
+            end,
+        })
     end
 end
 
