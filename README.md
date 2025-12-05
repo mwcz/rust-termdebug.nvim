@@ -75,8 +75,26 @@ These are the default keymaps.
   | `<leader>dp` | `scheduler.lock`             | Pin thread             | Locks the GDB scheduler to the current thread, preventing the debugger from jumping between threads when stepping. |
   | `<leader>dP` | `scheduler.unlock`           | Unpin thread           | Unlocks the GDB scheduler.                                                                                         |
   | `<leader>dv` | `:Var`                       | Show simple variables  | Runs `:Var` to inspect the state of _simple_ variables in the current scope.                                       |
+  | `<leader>dh` | `termdebug.toggle`           | Toggle debug panels    | Toggle debug panel visibility.                                                                                     |
 
 If you'd rather customize your keymaps, set `use_default_keymaps = false`.
+
+## Commands
+
+The following user commands are available:
+
+  | Command                    | Function               | Description                                          |
+  | :---                       | :---                   | :---                                                 |
+  | `:RustDebug`               | `cargo.debug_bin`      | Build and debug a rust binary                        |
+  | `:RustDebugTests`          | `cargo.debug_tests`    | Build and debug rust tests                           |
+  | `:RustDebugBenches`        | `cargo.debug_benches`  | Build and debug rust benchmarks                      |
+  | `:RustDebugBreak`          | `breakpoints.create`   | Set a breakpoint at current line                     |
+  | `:RustDebugClear`          | `breakpoints.delete_all` | Clear all breakpoints                              |
+  | `:RustDebugPinThread`      | `scheduler.lock`       | Lock scheduler to current thread                     |
+  | `:RustDebugUnpinThread`    | `scheduler.unlock`     | Unlock scheduler                                     |
+  | `:RustDebugHide`           | `termdebug.hide`       | Hide termdebug panels                                |
+  | `:RustDebugShow`           | `termdebug.show`       | Show termdebug panels                                |
+  | `:RustDebugToggle`         | `termdebug.toggle`     | Toggle termdebug panel visibility                    |
 
 ## Selecting from multiple binaries/tests/examples/benchmarks
 

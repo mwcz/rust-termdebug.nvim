@@ -2,6 +2,7 @@ local breakpoints = require("breakpoints")
 local scheduler = require("scheduler")
 local cargo = require("cargo")
 local process = require("process")
+local termdebug = require("termdebug")
 
 local keymaps = {}
 
@@ -28,6 +29,7 @@ keymaps.default = function()
         breakpoints.delete_curline,
         { desc = "Clear breakpoint", remap = true, silent = true }
     )
+    vim.keymap.set("n", "<leader>dh", termdebug.toggle, { desc = "Toggle debug panels", noremap = true, silent = true })
 end
 
 return keymaps
