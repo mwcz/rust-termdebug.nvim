@@ -32,6 +32,10 @@ rust_termdebug.setup = function(options_in)
         keymaps.default()
     end
 
+    if options.current.enable_telescope then
+        keymaps.telescope()
+    end
+
     -- Set up breakpoint persistence if enabled
     if options.current.persist_breakpoints then
         breakpoints.set_persistence(true)

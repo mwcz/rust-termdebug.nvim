@@ -32,4 +32,15 @@ keymaps.default = function()
     vim.keymap.set("n", "<leader>dh", termdebug.toggle, { desc = "Toggle debug panels", noremap = true, silent = true })
 end
 
+keymaps.telescope = function()
+    vim.keymap.set("n", "<leader>dl", function()
+        local has_telescope, telescope_integration = pcall(require, "telescope_integration")
+        if has_telescope then
+            telescope_integration.show_breakpoints()
+        else
+            vim.notify("Telescope.nvim is not installed", vim.log.levels.WARN)
+        end
+    end, { desc = "List breakpoints (Telescope)", noremap = true, silent = true })
+end
+
 return keymaps

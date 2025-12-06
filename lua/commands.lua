@@ -49,6 +49,16 @@ commands.create = function()
     vim.api.nvim_create_user_command("RustDebugToggle", termdebug.toggle, {
         desc = "Toggle termdebug panels visibility",
     })
+
+    -- Telescope integration (optional, only if telescope is available)
+    vim.api.nvim_create_user_command("RustDebugBreakpoints", function()
+        local has_telescope, telescope_integration = pcall(require, "telescope_integration")
+        if has_telescope then
+            telescope_integration.show_breakpoints()
+        else
+            vim.notify("Telescope.nvim is not installed", vim.log.levels.WARN)
+        end
+    end, { desc = "Show breakpoints in Telescope picker" })
 end
 
 return commands

@@ -46,6 +46,15 @@ Default configuration:
     use_default_keymaps = true,
     -- Swap the gdb window and the program stdout window.
     swap_termdebug_windows = true,
+    -- The suffix to append to options in selection menus to pin that choice
+    -- for the current session. For example, " [pin]" or " 📌"
+    pin_suffix = " [pin]",
+    -- Persist breakpoints across Neovim sessions in a workspace-local file
+    -- (.rust-termdebug.nvim/breakpoints.json in the workspace root)
+    persist_breakpoints = false,
+    -- Enable Telescope integration for listing breakpoints
+    -- Requires telescope.nvim to be installed
+    enable_telescope = false,
     -- This is used to configure Vim's built-in g:termdebug_config on
     -- startup. If you already have g:termdebug_config set in your config,
     -- this option will be ignored.
@@ -76,6 +85,7 @@ These are the default keymaps.
   | `<leader>dP` | `scheduler.unlock`           | Unpin thread           | Unlocks the GDB scheduler.                                                                                         |
   | `<leader>dv` | `:Var`                       | Show simple variables  | Runs `:Var` to inspect the state of _simple_ variables in the current scope.                                       |
   | `<leader>dh` | `termdebug.toggle`           | Toggle debug panels    | Toggle debug panel visibility.                                                                                     |
+  | `<leader>dl` | `telescope_integration.show_breakpoints` | List breakpoints | Show all breakpoints in Telescope picker (requires `enable_telescope = true`). Press `<C-d>` to delete a breakpoint. |
 
 If you'd rather customize your keymaps, set `use_default_keymaps = false`.
 
@@ -95,6 +105,7 @@ The following user commands are available:
   | `:RustDebugHide`           | `termdebug.hide`       | Hide termdebug panels                                |
   | `:RustDebugShow`           | `termdebug.show`       | Show termdebug panels                                |
   | `:RustDebugToggle`         | `termdebug.toggle`     | Toggle termdebug panel visibility                    |
+  | `:RustDebugBreakpoints`    | `telescope_integration.show_breakpoints` | Show all breakpoints in Telescope (requires telescope.nvim) |
 
 ## Selecting from multiple binaries/tests/examples/benchmarks
 

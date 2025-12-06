@@ -152,6 +152,26 @@ M.delete_curline = function()
     M.save_to_disk()
 end
 
+-- Delete breakpoint at a specific buffer and line (0-indexed)
+M.delete_at = function(bufnr, line)
+    if breakpoint_marks[bufnr] and breakpoint_marks[bufnr][line] then
+        -- Delete the extmark
+        vim.api.nvim_buf_del_extmark(bufnr, ns_id, breakpoint_marks[bufnr][line])
+        breakpoint_marks[bufnr][line] = nil
+
+        -- Try to delete in GDB if termdebug is running
+        -- We need to find the GDB breakpoint number for this location
+        local filename = vim.api.nvim_buf_get_name(bufnr)
+        local gdb_line = line + 1 -- GDB uses 1-indexed lines
+        pcall(vim.fn.TermDebugSendCommand, string.format("clear %s:%d", filename, gdb_line))
+
+        -- Save to disk immediately
+        M.save_to_disk()
+        return true
+    end
+    return false
+end
+
 -- Toggle breakpoint on the current line
 M.toggle = function()
     local bufnr = vim.api.nvim_get_current_buf()

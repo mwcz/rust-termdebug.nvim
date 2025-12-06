@@ -20,8 +20,11 @@ local options = {
         -- for the current session. For example, " [pin]" or " 📌"
         pin_suffix = " [pin]",
         -- Persist breakpoints across Neovim sessions in a workspace-local file
-        -- (.rust-termdebug-breakpoints.json in the workspace root)
+        -- (.rust-termdebug.nvim/breakpoints.json in the workspace root)
         persist_breakpoints = false,
+        -- Enable Telescope integration for listing breakpoints
+        -- Requires telescope.nvim to be installed
+        enable_telescope = false,
         -- This is used to configure Vim's built-in g:termdebug_config on
         -- startup. If you already have g:termdebug_config set in your config,
         -- this option will be ignored.
