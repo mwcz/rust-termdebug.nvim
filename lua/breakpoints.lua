@@ -120,7 +120,8 @@ M.create = function()
 end
 
 M.delete_all = function()
-    vim.fn.TermDebugSendCommand("d")
+    -- Try to delete in GDB if termdebug is running
+    pcall(vim.fn.TermDebugSendCommand, "d")
 
     -- Clear all extmarks and clean up handlers
     for bufnr, _ in pairs(breakpoint_marks) do
@@ -137,7 +138,8 @@ end
 
 -- clear breakpoints on the current line
 M.delete_curline = function()
-    vim.cmd("Clear")
+    -- Try to delete in GDB if termdebug is running
+    pcall(vim.cmd, "Clear")
 
     -- Remove the extmark on the current line
     local bufnr = vim.api.nvim_get_current_buf()
