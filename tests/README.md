@@ -1,39 +1,20 @@
 # Tests
 
-Basic smoke tests for rust-termdebug.nvim using [plenary.nvim](https://github.com/nvim-lua/plenary.nvim).
+Tests for rust-termdebug.nvim using [plenary.nvim](https://github.com/nvim-lua/plenary.nvim).
 
 ## Running Tests
 
+Unit tests (run in headless mode):
 ```bash
 make test
 ```
 
-Or manually:
-
+End-to-end tests (requires terminal UI):
 ```bash
-nvim --headless -u tests/minimal_init.lua \
-  -c "PlenaryBustedDirectory tests/ { minimal_init = 'tests/minimal_init.lua' }"
+make test-e2e
 ```
 
-## Test Structure
-
-- `tests/cargo_spec.lua` - Tests for cargo module functions
-- `tests/fixtures/test-project/` - A Rust workspace with multiple crates for testing
-- `tests/minimal_init.lua` - Minimal Neovim configuration for running tests
-
-## Test Coverage
-
-Current tests cover:
-- `cargo.metadata()` - Workspace metadata parsing
-- `cargo.current_crate_name()` - Crate name resolution from file paths
-- `cargo.build_tests()` - Test compilation and artifact collection
-- `cargo.build_benches()` - Benchmark compilation and artifact collection
-- `cargo.clear_pins()` - Pin clearing functionality
-
-## Cleaning Up
-
+Clean up test artifacts:
 ```bash
 make clean
 ```
-
-This removes build artifacts and temporary test files.
