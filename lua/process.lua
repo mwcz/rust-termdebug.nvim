@@ -35,7 +35,7 @@ process.debug_attach = function()
         vim.notify("Attaching to PID: " .. pid .. " (" .. program_path .. ")", vim.log.levels.INFO)
 
         local original_win_id = vim.api.nvim_get_current_win()
-        termdebug.start(nil, original_win_id)
+        termdebug.start(nil, { original_win_id = original_win_id })
 
         vim.defer_fn(function()
             vim.fn.TermDebugSendCommand("attach " .. pid)
