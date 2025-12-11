@@ -25,6 +25,14 @@ local options = {
         -- Enable Telescope integration for listing breakpoints
         -- Requires telescope.nvim to be installed
         enable_telescope = false,
+        -- Podman/container debugging configuration
+        podman = {
+            -- Automatically inject gdbserver into containers that don't have it
+            inject_gdbserver = false,
+            -- Port to use for gdbserver in containers
+            -- Can be a number (specific port) or "auto" to choose an unused port automatically
+            gdbserver_port = "auto",
+        },
         -- This is used to configure Vim's built-in g:termdebug_config on
         -- startup. If you already have g:termdebug_config set in your config,
         -- this option will be ignored.
