@@ -427,6 +427,161 @@ describe("breakpoint persistence integration", function()
         end)
     end)
 
+    describe("jaccard line_locator", function()
+        local persist_config = { enabled = true, line_locator = "jaccard" }
+
+        it("should restore breakpoint when line unchanged", function()
+            breakpoints.set_persistence(persist_config)
+
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- let x = 42;
+            breakpoints.create()
+
+            breakpoints.save_to_disk()
+            vim.cmd("bwipeout!")
+
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+            breakpoints.load_from_disk()
+
+            local bps = breakpoints.get_all()
+            assert.equals(1, #bps)
+            assert.equals(3, bps[1].line)
+        end)
+
+        it("should match line with minor token changes (variable rename)", function()
+            breakpoints.set_persistence(persist_config)
+
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- let x = 42;
+            breakpoints.create()
+
+            breakpoints.save_to_disk()
+            vim.cmd("bwipeout!")
+
+            -- Rename variable x to num OUTSIDE vim
+            local modified_content = {
+                "fn main() {",
+                '    println!("Line 2");',
+                "    let num = 42;", -- was "let x = 42;" - 3/4 tokens match
+                "    let y = num + 1;",
+                '    println!("y = {}", y);',
+                "    let z = y * 2;",
+                '    println!("z = {}", z);',
+                "}",
+            }
+            vim.fn.writefile(modified_content, main_rs_path)
+
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+            breakpoints.load_from_disk()
+
+            -- Should still find line 3 (jaccard similarity: let, 42 match; x vs num differ)
+            local bps = breakpoints.get_all()
+            assert.equals(1, #bps)
+            assert.equals(3, bps[1].line)
+        end)
+
+        it("should prefer position-proximate match when similarity is equal", function()
+            breakpoints.set_persistence(persist_config)
+
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- let x = 42;
+            breakpoints.create()
+
+            breakpoints.save_to_disk()
+            vim.cmd("bwipeout!")
+
+            -- Create file with identical lines at different positions
+            local modified_content = {
+                "fn main() {",
+                "    let x = 42;", -- Line 2 (distance 1 from original 3)
+                "    println!(\"a\");",
+                "    let x = 42;", -- Line 4 (distance 1 from original 3)
+                "    println!(\"b\");",
+                "    let x = 42;", -- Line 6 (distance 3 from original 3)
+                "}",
+            }
+            vim.fn.writefile(modified_content, main_rs_path)
+
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+            breakpoints.load_from_disk()
+
+            -- When similarity is equal, should pick earlier match (line 2)
+            local bps = breakpoints.get_all()
+            assert.equals(1, #bps)
+            assert.equals(2, bps[1].line)
+        end)
+
+        it("should relocate breakpoint when lines inserted before it", function()
+            breakpoints.set_persistence(persist_config)
+
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- let x = 42;
+            breakpoints.create()
+
+            breakpoints.save_to_disk()
+            vim.cmd("bwipeout!")
+
+            -- Insert lines at top
+            local modified_content = {
+                "// Comment 1",
+                "// Comment 2",
+                "fn main() {",
+                '    println!("Line 2");',
+                "    let x = 42;", -- Now at line 5
+                "    let y = x + 1;",
+                '    println!("y = {}", y);',
+                "}",
+            }
+            vim.fn.writefile(modified_content, main_rs_path)
+
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+            breakpoints.load_from_disk()
+
+            local bps = breakpoints.get_all()
+            assert.equals(1, #bps)
+            assert.equals(5, bps[1].line)
+        end)
+
+        it("should fail when no line has sufficient similarity", function()
+            breakpoints.set_persistence(persist_config)
+
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 }) -- let x = 42;
+            breakpoints.create()
+
+            breakpoints.save_to_disk()
+            vim.cmd("bwipeout!")
+
+            -- Completely different content
+            local modified_content = {
+                "fn main() {",
+                '    println!("Hello");',
+                '    println!("World");',
+                "}",
+            }
+            vim.fn.writefile(modified_content, main_rs_path)
+
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+
+            assert.has_no.errors(function()
+                breakpoints.load_from_disk()
+            end)
+
+            local bps = breakpoints.get_all()
+            assert.equals(0, #bps)
+        end)
+    end)
+
     describe("extmark movement persistence", function()
         local persist_config = { enabled = true, line_locator = "exact" }
 

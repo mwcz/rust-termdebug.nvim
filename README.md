@@ -54,10 +54,12 @@ Default configuration:
     -- Can be `true` (use defaults), `false` (disabled), or a table:
     -- persist_breakpoints = {
     --     enabled = true,
-    --     line_locator = "exact", -- or "hash" for content-based matching
+    --     line_locator = "exact", -- or "hash", "jaccard"
     -- }
-    -- "exact": restores breakpoints at saved line numbers (skips if out of range)
-    -- "hash": matches by line content hash (survives line insertions/deletions)
+    -- Line locator strategies:
+    -- "exact": restores at saved line numbers (skips if out of range)
+    -- "hash": matches by exact line content hash (survives line movement)
+    -- "jaccard": token-based similarity matching (survives minor edits/renames)
     persist_breakpoints = false,
     -- Enable Telescope integration for listing breakpoints
     -- Requires telescope.nvim to be installed
