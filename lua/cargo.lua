@@ -882,4 +882,9 @@ cargo.rebuild_and_reload = function()
     end
 end
 
+-- Exported for testing
+cargo._profile_to_target_dir = profile_to_target_dir
+cargo._profile_to_build_flag = profile_to_build_flag
+cargo._get_available_profiles = get_available_profiles
+
 return cargo

@@ -133,4 +133,62 @@ describe("cargo module", function()
             end)
         end)
     end)
+
+    describe("profile helpers", function()
+        describe("_profile_to_target_dir", function()
+            it("should map dev to debug", function()
+                assert.equals("debug", cargo._profile_to_target_dir("dev"))
+            end)
+
+            it("should pass through release", function()
+                assert.equals("release", cargo._profile_to_target_dir("release"))
+            end)
+
+            it("should pass through custom profiles", function()
+                assert.equals("profiling", cargo._profile_to_target_dir("profiling"))
+                assert.equals("my-custom", cargo._profile_to_target_dir("my-custom"))
+            end)
+        end)
+
+        describe("_profile_to_build_flag", function()
+            it("should return empty string for dev", function()
+                assert.equals("", cargo._profile_to_build_flag("dev"))
+            end)
+
+            it("should return --release for release", function()
+                assert.equals("--release", cargo._profile_to_build_flag("release"))
+            end)
+
+            it("should return --profile for custom profiles", function()
+                assert.equals("--profile profiling", cargo._profile_to_build_flag("profiling"))
+                assert.equals("--profile my-custom", cargo._profile_to_build_flag("my-custom"))
+            end)
+        end)
+
+        describe("_get_available_profiles", function()
+            it("should always include dev and release", function()
+                local metadata = cargo.metadata()
+                local profiles = cargo._get_available_profiles(metadata.workspace_root)
+
+                assert.is_true(vim.tbl_contains(profiles, "dev"))
+                assert.is_true(vim.tbl_contains(profiles, "release"))
+            end)
+
+            it("should detect custom profiles from Cargo.toml", function()
+                local metadata = cargo.metadata()
+                local profiles = cargo._get_available_profiles(metadata.workspace_root)
+
+                -- test-project/Cargo.toml has [profile.profiling]
+                assert.is_true(vim.tbl_contains(profiles, "profiling"))
+            end)
+
+            it("should return dev and release first", function()
+                local metadata = cargo.metadata()
+                local profiles = cargo._get_available_profiles(metadata.workspace_root)
+
+                assert.equals("dev", profiles[1])
+                assert.equals("release", profiles[2])
+            end)
+        end)
+    end)
 end)

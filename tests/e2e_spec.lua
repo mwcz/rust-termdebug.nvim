@@ -345,4 +345,91 @@ describe("e2e tests", function()
             assert.is_not_nil(output:match("off"), "Scheduler should be unlocked")
         end)
     end)
+
+    describe("profile selection", function()
+        it("should show all profiles in binary selection menu", function()
+            -- Create a temporary crate with custom profiles
+            local tmp_dir = vim.fn.tempname()
+            vim.fn.mkdir(tmp_dir, "p")
+
+            -- Create Cargo.toml with custom profiles
+            local cargo_toml = [[
+[package]
+name = "profile-test"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+debug = true
+
+[profile.profiling]
+inherits = "release"
+debug = 2
+
+[profile.bench-debug]
+inherits = "release"
+debug = true
+]]
+            vim.fn.writefile(vim.split(cargo_toml, "\n"), tmp_dir .. "/Cargo.toml")
+
+            -- Create src/main.rs
+            vim.fn.mkdir(tmp_dir .. "/src", "p")
+            vim.fn.writefile({ "fn main() {}" }, tmp_dir .. "/src/main.rs")
+
+            -- Change to temp directory
+            local original_dir = vim.fn.getcwd()
+            vim.cmd("cd " .. vim.fn.fnameescape(tmp_dir))
+
+            -- Clear any pinned selections from previous tests
+            cargo.clear_pins()
+
+            -- Capture vim.ui.select calls
+            local captured_choices = nil
+            local original_select = vim.ui.select
+            vim.ui.select = function(choices, opts, on_choice)
+                captured_choices = choices
+                -- Don't actually select anything
+            end
+
+            -- Call debug_bin to trigger menu
+            cargo.debug_bin()
+
+            -- Restore vim.ui.select
+            vim.ui.select = original_select
+
+            -- Verify choices were captured
+            assert.is_not_nil(captured_choices, "vim.ui.select should have been called")
+
+            -- Convert choices to string for easier pattern matching
+            local choices_str = table.concat(captured_choices, "\n")
+
+            -- Check that all expected profiles appear
+            assert.is_not_nil(choices_str:match("%(dev%)"), "Should include dev profile")
+            assert.is_not_nil(choices_str:match("%(release%)"), "Should include release profile")
+            assert.is_not_nil(choices_str:match("%(profiling%)"), "Should include profiling profile")
+            assert.is_not_nil(choices_str:match("%(bench%-debug%)"), "Should include bench-debug profile")
+
+            -- Check that pin options are included
+            assert.is_not_nil(choices_str:match("%[pin%]"), "Should include pin options")
+
+            -- Check binary name appears
+            assert.is_not_nil(choices_str:match("profile%-test"), "Should include binary name")
+
+            -- Cleanup
+            vim.cmd("cd " .. vim.fn.fnameescape(original_dir))
+            vim.fn.delete(tmp_dir, "rf")
+        end)
+
+        it("should build with correct profile flags", function()
+            assert.equals("", cargo._profile_to_build_flag("dev"))
+            assert.equals("--release", cargo._profile_to_build_flag("release"))
+            assert.equals("--profile profiling", cargo._profile_to_build_flag("profiling"))
+        end)
+
+        it("should use correct target directory for profiles", function()
+            assert.equals("debug", cargo._profile_to_target_dir("dev"))
+            assert.equals("release", cargo._profile_to_target_dir("release"))
+            assert.equals("profiling", cargo._profile_to_target_dir("profiling"))
+        end)
+    end)
 end)
