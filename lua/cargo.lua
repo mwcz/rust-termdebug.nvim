@@ -4,6 +4,48 @@ local options = require("options")
 
 local cargo = {}
 
+-- Returns the target directory name for a given profile
+-- "dev" -> "debug", "release" -> "release", custom -> custom
+local function profile_to_target_dir(profile)
+    if profile == "dev" then
+        return "debug"
+    end
+    return profile
+end
+
+-- Returns cargo build flags for a given profile
+-- "dev" -> "", "release" -> "--release", custom -> "--profile <name>"
+local function profile_to_build_flag(profile)
+    if profile == "dev" then
+        return ""
+    elseif profile == "release" then
+        return "--release"
+    else
+        return "--profile " .. profile
+    end
+end
+
+-- Parse available profiles from workspace Cargo.toml
+-- Returns {"dev", "release", ...custom profiles}
+local function get_available_profiles(workspace_root)
+    local profiles = { "dev", "release" }
+    local cargo_toml_path = workspace_root .. "/Cargo.toml"
+
+    local cargo_toml = vim.fn.readfile(cargo_toml_path)
+    if not cargo_toml then
+        return profiles
+    end
+
+    for _, line in ipairs(cargo_toml) do
+        local custom_profile = line:match("^%[profile%.([^%]]+)%]")
+        if custom_profile and custom_profile ~= "dev" and custom_profile ~= "release" then
+            table.insert(profiles, custom_profile)
+        end
+    end
+
+    return profiles
+end
+
 -- Debug session types
 local DebugType = {
     BINARY = "binary",
@@ -201,6 +243,7 @@ cargo.metadata = function()
 end
 
 -- Session-local variables to store pinned selections
+-- pinned_binary stores { name = "binary_name", profile = "dev" }
 local pinned_binary = nil
 local pinned_test = nil
 local pinned_example = nil
@@ -219,12 +262,18 @@ cargo.debug_bin = function()
         return
     end
     local target_dir = metadata.target_directory
+    local profiles = get_available_profiles(metadata.workspace_root)
 
-    local function rust_build_and_debug(bin_crate_name)
-        local bin_path = target_dir .. "/debug/" .. bin_crate_name
+    local function rust_build_and_debug(bin_crate_name, profile)
+        local target_subdir = profile_to_target_dir(profile)
+        local bin_path = target_dir .. "/" .. target_subdir .. "/" .. bin_crate_name
+        local profile_flag = profile_to_build_flag(profile)
         local build_cmd = "cargo build --bin " .. bin_crate_name
+        if profile_flag ~= "" then
+            build_cmd = build_cmd .. " " .. profile_flag
+        end
 
-        vim.notify("Building binary: " .. bin_crate_name, vim.log.levels.INFO)
+        vim.notify("Building binary: " .. bin_crate_name .. " (" .. profile .. ")", vim.log.levels.INFO)
 
         local original_win_id = vim.api.nvim_get_current_win()
 
@@ -234,14 +283,15 @@ cargo.debug_bin = function()
                 original_win_id = original_win_id,
                 type = DebugType.BINARY,
                 name = bin_crate_name,
+                profile = profile,
                 build_cmd = build_cmd,
             })
         end)
     end
 
-    -- If there's a pinned binary, use it automatically
+    -- If there's a pinned binary+profile, use it automatically
     if pinned_binary then
-        rust_build_and_debug(pinned_binary)
+        rust_build_and_debug(pinned_binary.name, pinned_binary.profile)
         return
     end
 
@@ -295,45 +345,57 @@ cargo.debug_bin = function()
     vim.list_extend(priority_bin_list, root_binaries)
     vim.list_extend(priority_bin_list, other_binaries)
 
-    if #priority_bin_list == 1 then
-        -- build and debug the one and only binary
-        rust_build_and_debug(priority_bin_list[1].name)
-    else
-        -- choose which binary to build and debug
-        local choices = {}
-        local pin_suffix = options.current.pin_suffix
+    -- Build choices: binary + profile combinations
+    -- Each combination has a pin and non-pin variant
+    local choices = {}
+    local choice_data = {} -- parallel array to store {name, profile, pin} for each choice
+    local pin_suffix = options.current.pin_suffix
 
-        -- Find the longest binary name for alignment
-        local max_len = 0
-        for _, bin_info in ipairs(priority_bin_list) do
-            if #bin_info.name > max_len then
-                max_len = #bin_info.name
-            end
+    -- Find the longest binary name and profile for alignment
+    local max_name_len = 0
+    local max_profile_len = 0
+    for _, bin_info in ipairs(priority_bin_list) do
+        if #bin_info.name > max_name_len then
+            max_name_len = #bin_info.name
         end
-
-        for _, bin_info in ipairs(priority_bin_list) do
-            local padding = string.rep(" ", max_len - #bin_info.name)
-            table.insert(choices, bin_info.name .. padding .. pin_suffix)
-            table.insert(choices, bin_info.name)
-        end
-
-        vim.ui.select(choices, { prompt = "Select a binary to debug:" }, function(choice)
-            if choice then
-                local bin_to_debug
-                -- Check if the user chose a "pin" option (strip padding and suffix)
-                local trimmed_choice = choice:gsub("%s+$", "")
-                if choice:sub(-#pin_suffix) == pin_suffix then
-                    -- Extract the binary name and save it to the session variable
-                    bin_to_debug = choice:match("^(%S+)")
-                    pinned_binary = bin_to_debug
-                    vim.notify("Pinned " .. bin_to_debug .. " as default for this session.", vim.log.levels.INFO)
-                else
-                    bin_to_debug = choice
-                end
-                rust_build_and_debug(bin_to_debug)
-            end
-        end)
     end
+    for _, profile in ipairs(profiles) do
+        if #profile > max_profile_len then
+            max_profile_len = #profile
+        end
+    end
+
+    -- Build the choice list: for each binary, show all profiles
+    -- Format: "binary_name<tab>(profile)<padding>[pin]"
+    for _, bin_info in ipairs(priority_bin_list) do
+        for _, profile in ipairs(profiles) do
+            local name_padding = string.rep(" ", max_name_len - #bin_info.name)
+            local profile_padding = string.rep(" ", max_profile_len - #profile)
+            local display = bin_info.name .. name_padding .. "\t(" .. profile .. ")" .. profile_padding
+            -- Pin option first
+            table.insert(choices, display .. pin_suffix)
+            table.insert(choice_data, { name = bin_info.name, profile = profile, pin = true })
+            -- Non-pin option
+            table.insert(choices, display)
+            table.insert(choice_data, { name = bin_info.name, profile = profile, pin = false })
+        end
+    end
+
+    vim.ui.select(choices, { prompt = "Select a binary to debug:" }, function(_, idx)
+        if not idx then
+            return
+        end
+
+        local selected = choice_data[idx]
+        if selected.pin then
+            pinned_binary = { name = selected.name, profile = selected.profile }
+            vim.notify(
+                "Pinned " .. selected.name .. " (" .. selected.profile .. ") as default for this session.",
+                vim.log.levels.INFO
+            )
+        end
+        rust_build_and_debug(selected.name, selected.profile)
+    end)
 end
 
 cargo.debug_tests = function()
@@ -753,7 +815,8 @@ cargo.rebuild_and_reload = function()
 
     if session.type == DebugType.BINARY and session.build_cmd then
         -- For binaries, we have a build_cmd we can use
-        vim.notify("Rebuilding binary: " .. session.name, vim.log.levels.INFO)
+        local profile_info = session.profile and (" (" .. session.profile .. ")") or ""
+        vim.notify("Rebuilding binary: " .. session.name .. profile_info, vim.log.levels.INFO)
         run_build(session.build_cmd, function()
             vim.notify("Reloading binary: " .. session.path, vim.log.levels.INFO)
             -- Send file command to reload the binary
