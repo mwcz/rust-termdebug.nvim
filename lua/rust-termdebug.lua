@@ -37,8 +37,9 @@ rust_termdebug.setup = function(options_in)
     end
 
     -- Set up breakpoint persistence if enabled
-    if options.current.persist_breakpoints then
-        breakpoints.set_persistence(true)
+    local persist_config = options.current.persist_breakpoints
+    if persist_config.enabled then
+        breakpoints.set_persistence(persist_config)
 
         -- Load breakpoints from previous session
         vim.defer_fn(function()
@@ -53,7 +54,7 @@ rust_termdebug.setup = function(options_in)
             desc = "Save rust-termdebug breakpoints before exit",
         })
     else
-        breakpoints.set_persistence(false)
+        breakpoints.set_persistence(nil)
     end
 end
 

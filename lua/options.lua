@@ -21,7 +21,14 @@ local options = {
         pin_suffix = " [pin]",
         -- Persist breakpoints across Neovim sessions in a workspace-local file
         -- (.rust-termdebug.nvim/breakpoints.json in the workspace root)
-        persist_breakpoints = false,
+        -- Can be `true` (use defaults), `false` (disabled), or a table with options
+        persist_breakpoints = {
+            enabled = false,
+            -- Strategy for locating lines when restoring breakpoints
+            -- 'exact': use saved line number directly (skips if out of range)
+            -- 'hash': hash trimmed line content, match by content on restore
+            line_locator = "exact",
+        },
         -- Enable Telescope integration for listing breakpoints
         -- Requires telescope.nvim to be installed
         enable_telescope = false,
@@ -47,6 +54,15 @@ local options = {
 }
 
 options.init = function(options_in)
+    options_in = options_in or {}
+
+    -- Normalize persist_breakpoints: true -> {enabled=true}, false -> {enabled=false}
+    if options_in.persist_breakpoints == true then
+        options_in.persist_breakpoints = { enabled = true }
+    elseif options_in.persist_breakpoints == false then
+        options_in.persist_breakpoints = { enabled = false }
+    end
+
     options.current = vim.tbl_deep_extend("force", options.defaults, options_in)
 end
 

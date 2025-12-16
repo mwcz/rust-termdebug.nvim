@@ -1,6 +1,7 @@
 -- Minimal init for running tests
 vim.cmd([[set runtimepath=$VIMRUNTIME]])
-vim.cmd([[set packpath=/tmp/nvim/site]])
+-- Include both vim runtime (for termdebug) and temp path (for plenary)
+vim.cmd([[set packpath=$VIMRUNTIME,/tmp/nvim/site]])
 
 -- Disable netrw to avoid packpath errors
 vim.g.loaded_netrw = 1

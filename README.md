@@ -51,6 +51,13 @@ Default configuration:
     pin_suffix = " [pin]",
     -- Persist breakpoints across Neovim sessions in a workspace-local file
     -- (.rust-termdebug.nvim/breakpoints.json in the workspace root)
+    -- Can be `true` (use defaults), `false` (disabled), or a table:
+    -- persist_breakpoints = {
+    --     enabled = true,
+    --     line_locator = "exact", -- or "hash" for content-based matching
+    -- }
+    -- "exact": restores breakpoints at saved line numbers (skips if out of range)
+    -- "hash": matches by line content hash (survives line insertions/deletions)
     persist_breakpoints = false,
     -- Enable Telescope integration for listing breakpoints
     -- Requires telescope.nvim to be installed

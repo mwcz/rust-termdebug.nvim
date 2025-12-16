@@ -9,8 +9,25 @@ local breakpoint_marks = {}
 -- Track which buffers have the deletion handler set up
 local buffers_with_handlers = {}
 
--- Persistence settings
-local persistence_enabled = false
+-- Persistence settings (nil = disabled, table = config with line_locator, etc.)
+local persistence_config = nil
+
+-- Helper to get a shortened path for user messages
+local function short_path(filepath)
+    local cwd = vim.fn.getcwd()
+    if filepath:sub(1, #cwd) == cwd then
+        return filepath:sub(#cwd + 2) -- +2 to skip the trailing slash
+    end
+    return vim.fn.fnamemodify(filepath, ":~")
+end
+
+-- Helper to hash a trimmed line for content-based matching
+local function hash_line(line_content)
+    local trimmed = vim.trim(line_content)
+    -- Use a simple hash: we just need consistency, not cryptographic security
+    -- vim.fn.sha256 returns a hex string
+    return vim.fn.sha256(trimmed)
+end
 
 -- Get the workspace-specific persistence file path
 local function get_persistence_file()
@@ -232,11 +249,12 @@ end
 
 -- Save breakpoints to disk for persistence across sessions
 M.save_to_disk = function()
-    if not persistence_enabled then
+    if not persistence_config then
         return
     end
 
     local breakpoints_to_save = {}
+    local use_hash = persistence_config.line_locator == "hash"
 
     -- Collect all breakpoint locations from extmarks
     for bufnr, marks in pairs(breakpoint_marks) do
@@ -244,13 +262,29 @@ M.save_to_disk = function()
             local bufname = vim.api.nvim_buf_get_name(bufnr)
             -- Only save breakpoints for named buffers (files on disk)
             if bufname ~= "" then
+                -- Load buffer if needed for hash strategy
+                if use_hash and not vim.api.nvim_buf_is_loaded(bufnr) then
+                    vim.fn.bufload(bufnr)
+                end
+
                 for _, extmark_id in pairs(marks) do
                     local mark = vim.api.nvim_buf_get_extmark_by_id(bufnr, ns_id, extmark_id, {})
                     if mark and #mark > 0 then
-                        table.insert(breakpoints_to_save, {
+                        local line_1indexed = mark[1] + 1
+                        local bp_entry = {
                             file = bufname,
-                            line = mark[1] + 1, -- Convert to 1-indexed
-                        })
+                            line = line_1indexed,
+                        }
+
+                        -- Store line hash if using hash strategy
+                        if use_hash then
+                            local lines = vim.api.nvim_buf_get_lines(bufnr, mark[1], mark[1] + 1, false)
+                            if lines and #lines > 0 then
+                                bp_entry.line_hash = hash_line(lines[1])
+                            end
+                        end
+
+                        table.insert(breakpoints_to_save, bp_entry)
                     end
                 end
             end
@@ -265,9 +299,50 @@ M.save_to_disk = function()
     end
 end
 
+-- Find line by hash matching, returning 0-indexed line or nil
+local function find_line_by_hash(bufnr, target_hash, original_line_0indexed)
+    local line_count = vim.api.nvim_buf_line_count(bufnr)
+    local matching_lines = {}
+
+    -- Hash every line in the buffer and find matches
+    for i = 0, line_count - 1 do
+        local lines = vim.api.nvim_buf_get_lines(bufnr, i, i + 1, false)
+        if lines and #lines > 0 then
+            local line_hash = hash_line(lines[1])
+            if line_hash == target_hash then
+                -- If this is an exact position match, return immediately
+                if i == original_line_0indexed then
+                    return i
+                end
+                table.insert(matching_lines, i)
+            end
+        end
+    end
+
+    if #matching_lines == 0 then
+        return nil
+    end
+
+    if #matching_lines == 1 then
+        return matching_lines[1]
+    end
+
+    -- Multiple matches: find the one nearest to the original line
+    local best_line = matching_lines[1]
+    local best_distance = math.abs(matching_lines[1] - original_line_0indexed)
+    for _, line in ipairs(matching_lines) do
+        local distance = math.abs(line - original_line_0indexed)
+        if distance < best_distance then
+            best_line = line
+            best_distance = distance
+        end
+    end
+    return best_line
+end
+
 -- Load breakpoints from disk and create extmarks
 M.load_from_disk = function()
-    if not persistence_enabled then
+    if not persistence_config then
         return
     end
 
@@ -288,43 +363,93 @@ M.load_from_disk = function()
         return
     end
 
+    local use_hash = persistence_config.line_locator == "hash"
+    local restored_count = 0
+    local skipped_messages = {}
+
     -- Create extmarks for each saved breakpoint
     for _, bp in ipairs(breakpoints) do
+        local short_file = short_path(bp.file)
+        local bp_desc = string.format("%s:%d", short_file, bp.line)
+
         -- Check if the file exists
-        if vim.fn.filereadable(bp.file) == 1 then
+        if vim.fn.filereadable(bp.file) ~= 1 then
+            table.insert(skipped_messages, string.format("breakpoint %s invalid: file missing", bp_desc))
+        else
             -- Load the buffer if it's not already loaded
             local bufnr = vim.fn.bufnr(bp.file)
             if bufnr == -1 then
                 bufnr = vim.fn.bufadd(bp.file)
             end
+            -- Ensure buffer is loaded so we can query line count
+            vim.fn.bufload(bufnr)
 
-            -- Initialize buffer tracking if needed
-            if not breakpoint_marks[bufnr] then
-                breakpoint_marks[bufnr] = {}
+            local line_count = vim.api.nvim_buf_line_count(bufnr)
+            local target_line = bp.line - 1 -- Convert to 0-indexed
+
+            -- Determine the actual line to use
+            local actual_line = nil
+
+            if use_hash and bp.line_hash then
+                -- Hash strategy: find matching line by content
+                actual_line = find_line_by_hash(bufnr, bp.line_hash, target_line)
+                if not actual_line then
+                    table.insert(
+                        skipped_messages,
+                        string.format("breakpoint %s invalid: hashed line location failed", bp_desc)
+                    )
+                end
+            else
+                -- Exact strategy: validate line is in range
+                if target_line >= line_count then
+                    table.insert(skipped_messages, string.format("breakpoint %s invalid: out of range", bp_desc))
+                else
+                    actual_line = target_line
+                end
             end
 
-            -- Set up deletion handler for this buffer
-            setup_buffer_deletion_handler(bufnr)
+            -- Create the extmark if we found a valid line
+            if actual_line then
+                -- Initialize buffer tracking if needed
+                if not breakpoint_marks[bufnr] then
+                    breakpoint_marks[bufnr] = {}
+                end
 
-            -- Create extmark (0-indexed line)
-            local line = bp.line - 1
-            local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns_id, line, 0, {
-                sign_text = "●",
-                sign_hl_group = "DiagnosticError",
-            })
+                -- Set up deletion handler for this buffer
+                setup_buffer_deletion_handler(bufnr)
 
-            breakpoint_marks[bufnr][line] = extmark_id
+                -- Create extmark
+                local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns_id, actual_line, 0, {
+                    sign_text = "●",
+                    sign_hl_group = "DiagnosticError",
+                })
+
+                breakpoint_marks[bufnr][actual_line] = extmark_id
+                restored_count = restored_count + 1
+            end
         end
     end
 
-    if #breakpoints > 0 then
-        vim.notify("Loaded " .. #breakpoints .. " breakpoint(s) from previous session", vim.log.levels.INFO)
+    -- Report results
+    if #skipped_messages > 0 then
+        for _, msg in ipairs(skipped_messages) do
+            vim.notify(msg, vim.log.levels.WARN)
+        end
+    end
+
+    if restored_count > 0 or #skipped_messages > 0 then
+        local msg = string.format("Restored %d breakpoint(s)", restored_count)
+        if #skipped_messages > 0 then
+            msg = msg .. string.format(", %d failed", #skipped_messages)
+        end
+        vim.notify(msg, vim.log.levels.INFO)
     end
 end
 
 -- Enable or disable breakpoint persistence
-M.set_persistence = function(enabled)
-    persistence_enabled = enabled
+-- @param config table|nil - persistence config with line_locator, or nil to disable
+M.set_persistence = function(config)
+    persistence_config = config
 end
 
 return M

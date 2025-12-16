@@ -196,9 +196,11 @@ describe("breakpoints module", function()
     end)
 
     describe("breakpoint persistence", function()
+        local persist_config = { enabled = true, line_locator = "exact" }
+
         it("should save and load breakpoints from disk", function()
             -- Enable persistence
-            breakpoints.set_persistence(true)
+            breakpoints.set_persistence(persist_config)
 
             -- Create some breakpoints
             vim.api.nvim_win_set_cursor(0, { 3, 0 })
@@ -217,7 +219,7 @@ describe("breakpoints module", function()
             -- This clears in-memory state without calling delete_all (which would save empty state)
             package.loaded["breakpoints"] = nil
             breakpoints = require("breakpoints")
-            breakpoints.set_persistence(true)
+            breakpoints.set_persistence(persist_config)
 
             -- Verify in-memory state is empty after reload
             assert.equals(0, #breakpoints.get_all())
@@ -241,12 +243,12 @@ describe("breakpoints module", function()
             breakpoints.delete_all()
 
             -- Disable persistence
-            breakpoints.set_persistence(false)
+            breakpoints.set_persistence(nil)
         end)
 
         it("should handle empty persistence file gracefully", function()
             -- Enable persistence
-            breakpoints.set_persistence(true)
+            breakpoints.set_persistence(persist_config)
 
             -- Try to load when no file exists
             assert.has_no.errors(function()
@@ -257,7 +259,7 @@ describe("breakpoints module", function()
             assert.equals(0, #breakpoints.get_all())
 
             -- Disable persistence
-            breakpoints.set_persistence(false)
+            breakpoints.set_persistence(nil)
         end)
     end)
 

@@ -34,7 +34,9 @@ describe("options module", function()
             assert.is_true(defaults.use_default_keymaps)
             assert.is_true(defaults.swap_termdebug_windows)
             assert.equals(" [pin]", defaults.pin_suffix)
-            assert.is_false(defaults.persist_breakpoints)
+            assert.is_table(defaults.persist_breakpoints)
+            assert.is_false(defaults.persist_breakpoints.enabled)
+            assert.equals("exact", defaults.persist_breakpoints.line_locator)
             assert.is_false(defaults.enable_telescope)
         end)
 
@@ -59,7 +61,10 @@ describe("options module", function()
             options.init(user_opts)
 
             assert.is_false(options.current.gdb_auto_insert)
-            assert.is_true(options.current.persist_breakpoints)
+            -- persist_breakpoints = true should be normalized to table with enabled = true
+            assert.is_table(options.current.persist_breakpoints)
+            assert.is_true(options.current.persist_breakpoints.enabled)
+            assert.equals("exact", options.current.persist_breakpoints.line_locator)
             -- Other defaults should remain
             assert.is_true(options.current.use_default_keymaps)
             assert.equals(" [pin]", options.current.pin_suffix)
@@ -71,7 +76,7 @@ describe("options module", function()
             -- Should equal defaults
             assert.is_true(options.current.gdb_auto_insert)
             assert.is_true(options.current.keep_cursor_in_place)
-            assert.is_false(options.current.persist_breakpoints)
+            assert.is_false(options.current.persist_breakpoints.enabled)
         end)
 
         it("should handle nil user options by using empty table", function()
@@ -121,8 +126,8 @@ describe("options module", function()
         it("should update after init", function()
             options.init({ persist_breakpoints = true })
 
-            assert.is_true(options.current.persist_breakpoints)
-            assert.is_false(options.defaults.persist_breakpoints)
+            assert.is_true(options.current.persist_breakpoints.enabled)
+            assert.is_false(options.defaults.persist_breakpoints.enabled)
         end)
     end)
 
@@ -141,8 +146,51 @@ describe("options module", function()
             assert.is_false(options.current.keep_cursor_in_place)
             assert.is_false(options.current.use_default_keymaps)
             assert.is_false(options.current.swap_termdebug_windows)
-            assert.is_true(options.current.persist_breakpoints)
+            assert.is_true(options.current.persist_breakpoints.enabled)
             assert.is_true(options.current.enable_telescope)
+        end)
+    end)
+
+    describe("persist_breakpoints options", function()
+        it("should normalize true to table with enabled=true", function()
+            options.init({ persist_breakpoints = true })
+
+            assert.is_table(options.current.persist_breakpoints)
+            assert.is_true(options.current.persist_breakpoints.enabled)
+            assert.equals("exact", options.current.persist_breakpoints.line_locator)
+        end)
+
+        it("should normalize false to table with enabled=false", function()
+            options.init({ persist_breakpoints = false })
+
+            assert.is_table(options.current.persist_breakpoints)
+            assert.is_false(options.current.persist_breakpoints.enabled)
+            assert.equals("exact", options.current.persist_breakpoints.line_locator)
+        end)
+
+        it("should accept table config with custom line_locator", function()
+            options.init({
+                persist_breakpoints = {
+                    enabled = true,
+                    line_locator = "hash",
+                },
+            })
+
+            assert.is_table(options.current.persist_breakpoints)
+            assert.is_true(options.current.persist_breakpoints.enabled)
+            assert.equals("hash", options.current.persist_breakpoints.line_locator)
+        end)
+
+        it("should merge partial table config with defaults", function()
+            options.init({
+                persist_breakpoints = {
+                    enabled = true,
+                },
+            })
+
+            assert.is_true(options.current.persist_breakpoints.enabled)
+            -- line_locator should come from defaults
+            assert.equals("exact", options.current.persist_breakpoints.line_locator)
         end)
     end)
 end)
