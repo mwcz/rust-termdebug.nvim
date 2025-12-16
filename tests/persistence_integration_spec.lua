@@ -426,4 +426,53 @@ describe("breakpoint persistence integration", function()
             assert.same({ 3, 5 }, lines)
         end)
     end)
+
+    describe("extmark movement persistence", function()
+        local persist_config = { enabled = true, line_locator = "exact" }
+
+        it("should persist updated line positions after in-vim edits and save", function()
+            breakpoints.set_persistence(persist_config)
+
+            -- Open file and set breakpoint on line 3 ("let x = 42;")
+            vim.cmd("edit " .. vim.fn.fnameescape(main_rs_path))
+            vim.api.nvim_win_set_cursor(0, { 3, 0 })
+            breakpoints.create()
+
+            -- Verify breakpoint is at line 3
+            local bps_before = breakpoints.get_all()
+            assert.equals(1, #bps_before)
+            assert.equals(3, bps_before[1].line)
+
+            -- Insert two lines at the top of the file (inside vim)
+            -- This will cause the extmark to move from line 3 to line 5
+            vim.api.nvim_buf_set_lines(0, 0, 0, false, {
+                "// Comment line 1",
+                "// Comment line 2",
+            })
+
+            -- Verify extmark moved to line 5
+            local bps_after_edit = breakpoints.get_all()
+            assert.equals(1, #bps_after_edit)
+            assert.equals(5, bps_after_edit[1].line)
+
+            -- Save the file (this should trigger persistence update)
+            vim.cmd("write")
+
+            -- Close the buffer
+            vim.cmd("bwipeout!")
+
+            -- Reload module (simulates nvim restart)
+            package.loaded["breakpoints"] = nil
+            breakpoints = require("breakpoints")
+            breakpoints.set_persistence(persist_config)
+
+            -- Load from disk
+            breakpoints.load_from_disk()
+
+            -- Breakpoint should be restored at line 5 (the moved position)
+            local bps_restored = breakpoints.get_all()
+            assert.equals(1, #bps_restored)
+            assert.equals(5, bps_restored[1].line)
+        end)
+    end)
 end)

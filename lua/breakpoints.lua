@@ -96,6 +96,17 @@ local function setup_buffer_deletion_handler(bufnr)
         end,
     })
 
+    -- Save persistence when file is written (extmarks may have moved due to edits)
+    vim.api.nvim_create_autocmd("BufWritePost", {
+        group = augroup,
+        buffer = bufnr,
+        callback = function()
+            if breakpoint_marks[bufnr] and persistence_config then
+                M.save_to_disk()
+            end
+        end,
+    })
+
     buffers_with_handlers[bufnr] = true
 end
 
